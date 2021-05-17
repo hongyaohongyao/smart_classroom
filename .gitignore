@@ -1,0 +1,5 @@
+*.pt
+*.pth
+*.weights
+ignore_projects/*
+*.mp4
