@@ -48,6 +48,22 @@ Download the object detection model manually: **yolov3-spp.weights**([Google Dri
 
 - 放到face_recog/weights文件夹下
 
+### 5. 其他
+
+[百度云](https://pan.baidu.com/s/1X6TR2jiqdqg3Zi8wl7mkxw)  提取码：rwtl 
+
+**人脸识别**：dlib_face_recognition_resnet_model_v1.dat
+
+- detection_system/face_recog/weights
+
+**人脸对齐**：dlib_face_recognition_resnet_model_v1.dat
+
+- detection_system/face_recog/weights
+
+**作弊动作分类器**：cheating_detector_rfc_kp.pkl、
+
+- detection_system/weights
+
 ## 使用
 
 ### 运行setup.py安装必要内容

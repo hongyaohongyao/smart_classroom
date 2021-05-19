@@ -21,6 +21,20 @@ class PoseEstimator:
 
         self.model_points_68 = self._get_full_model_points()
 
+        self.body_model_points = np.array([  # 18,19,5,6
+            (0.0, -40.0, 0.0),  # neck
+            (0.0, 240.0, 5),  # hip
+            (-80, 0.0, 0.5),  # left shoulder
+            (+80, 0.0, 0.5),  # right shoulder
+        ])
+
+        self.neck_model_points = np.array([  # 17,18,5,6
+            (0.0, -90.0, 5),  # head
+            (0.0, 30.0, 0.0),  # neck
+            (-60, 70.0, 5),  # left shoulder
+            (+60, 70.0, 5),  # right shoulder
+        ])
+
         # Camera internals
         self.focal_length = self.size[1]
         self.camera_center = (self.size[1] / 2, self.size[0] / 2)
@@ -128,13 +142,12 @@ class PoseEstimator:
         from mpl_toolkits.mplot3d import Axes3D
         fig = pyplot.figure()
         ax = Axes3D(fig)
-
-        x = self.model_points_68[:, 0]
-        y = self.model_points_68[:, 1]
-        z = self.model_points_68[:, 2]
+        model_points = self.neck_model_points
+        x = model_points[:, 0]
+        y = model_points[:, 1]
+        z = model_points[:, 2]
 
         ax.scatter(x, y, z)
-        ax.axis('square')
         pyplot.xlabel('x')
         pyplot.ylabel('y')
         pyplot.show()
@@ -159,6 +172,46 @@ class PoseEstimator:
         #     useExtrinsicGuess=True)
         return rotation_vector, translation_vector
 
+    def solve_body_pose(self, image_points):
+        """
+        Solve pose from image points
+        Return (rotation_vector, translation_vector) as pose.
+        """
+        assert image_points.shape[0] == self.body_model_points.shape[
+            0], "3D points and 2D points should be of same number."
+        (_, rotation_vector, translation_vector) = cv2.solvePnP(
+            self.body_model_points, image_points, self.camera_matrix, self.dist_coeefs)
+
+        # (success, rotation_vector, translation_vector) = cv2.solvePnP(
+        #     self.model_points,
+        #     image_points,
+        #     self.camera_matrix,
+        #     self.dist_coeefs,
+        #     rvec=self.r_vec,
+        #     tvec=self.t_vec,
+        #     useExtrinsicGuess=True)
+        return rotation_vector, translation_vector
+
+    def solve_neck_pose(self, image_points):
+        """
+        Solve pose from image points
+        Return (rotation_vector, translation_vector) as pose.
+        """
+        assert image_points.shape[0] == self.neck_model_points.shape[
+            0], "3D points and 2D points should be of same number."
+        (_, rotation_vector, translation_vector) = cv2.solvePnP(
+            self.body_model_points, image_points, self.camera_matrix, self.dist_coeefs)
+
+        # (success, rotation_vector, translation_vector) = cv2.solvePnP(
+        #     self.model_points,
+        #     image_points,
+        #     self.camera_matrix,
+        #     self.dist_coeefs,
+        #     rvec=self.r_vec,
+        #     tvec=self.t_vec,
+        #     useExtrinsicGuess=True)
+        return rotation_vector, translation_vector
+
     def solve_pose_by_68_points(self, image_points):
         """
         Solve pose from all the 68 image points
@@ -171,14 +224,14 @@ class PoseEstimator:
             # self.r_vec = rotation_vector
             # self.t_vec = translation_vector
 
-        (_, rotation_vector, translation_vector) = cv2.solvePnP(
-            self.model_points_68,
-            image_points,
-            self.camera_matrix,
-            self.dist_coeefs,
-            rvec=rotation_vector,
-            tvec=translation_vector,
-            useExtrinsicGuess=True)
+        # (_, rotation_vector, translation_vector) = cv2.solvePnP(
+        #     self.model_points_68,
+        #     image_points,
+        #     self.camera_matrix,
+        #     self.dist_coeefs,
+        #     rvec=rotation_vector,
+        #     tvec=translation_vector,
+        #     useExtrinsicGuess=True)
 
         return rotation_vector, translation_vector
 

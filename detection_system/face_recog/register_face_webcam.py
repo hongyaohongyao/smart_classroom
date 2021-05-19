@@ -17,6 +17,7 @@ default_new_name = 'face'
 font = ImageFont.truetype("simsun.ttc", 20, encoding="utf-8")
 # 系统参数
 encoding_per_second = 5
+accept_step = 3
 # 识别指标
 close_eye_gate = 0.2  # 闭眼的门限值
 front_face_gate = 0.15  # 非正脸的门限值
@@ -69,7 +70,7 @@ def add_new_face(encoding, face_img, know_face_name, facebank=face_bank_path):
     tkinter.Button(root, text='确认', width=10, command=save) \
         .grid(row=2, column=0, sticky='W', padx=10, pady=5)
 
-    tkinter.Button(root, text='取消', width=10, command=root.quit) \
+    tkinter.Button(root, text='取消', width=10, command=root.destroy) \
         .grid(row=2, column=1, sticky='E', padx=10, pady=5)
 
     tkinter.mainloop()
@@ -134,7 +135,7 @@ if __name__ == '__main__':
             tips_text = f'Step.{current_step + 1}: 请 {step_type[step_state]}'
             cum_value = cum_value * (1 - cum_rate)
             # 注册条件达成判断========================
-            if current_step >= 3:
+            if current_step >= accept_step:
                 tips_text = f'请正视摄像头完成录入 '
                 if encoding_counter % encoding_interval != 0:
                     pass
@@ -185,10 +186,18 @@ if __name__ == '__main__':
                     cum_value += cum_rate
             tips_text += f'完成率 {round(cum_value * 100, 2)} %'
 
-            if cum_value >= accept_gate:
+            if cum_value >= accept_gate and current_step < accept_step:
                 step_state = generate_new_step_state()
                 current_step += 1
                 cum_value = 0
+                pass_tips_imgs = np.full_like(frame, 255)
+                pass_tips_imgs = cv2.putText(pass_tips_imgs,
+                                             'OK', (100, 100),
+                                             cv2.FONT_HERSHEY_TRIPLEX,
+                                             10, (0, 0, 255), 50,
+                                             bottomLeftOrigin=True)
+                cv2.imshow("register_face", pass_tips_imgs)
+                cv2.waitKey(1000)
 
         # 视频显示
         # opencv不支持中文，这里使用PIL作为画板

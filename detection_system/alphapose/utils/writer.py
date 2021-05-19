@@ -10,8 +10,8 @@ import torch.multiprocessing as mp
 
 from alphapose.utils.pPose_nms import pose_nms, write_json
 from alphapose.utils.transforms import get_func_heatmap_to_coord
-from headpose.pose_estimator import PoseEstimator
-from headpose.stabilizer import Stabilizer
+from pose_estimation.pose_estimator import PoseEstimator
+from pose_estimation.stabilizer import Stabilizer
 
 DEFAULT_VIDEO_SAVE_OPT = {
     'savepath': 'examples/res/1.mp4',
@@ -96,8 +96,9 @@ class DataDealer:
                 measure_num=1,
                 cov_process=0.1,
                 cov_measure=0.1) for _ in range(6)]
-            masks_list = []  # 头部关键点列表
+            pose_list = []  # 姿态列表
             emoji_available_list = []  # 需要进行表情识别的目标的索引
+
             face_naked_rate = []  # 所有人的脸部露出率
         # keep looping infinitelyd
         while True:
@@ -151,7 +152,7 @@ class DataDealer:
                 # =========================目标检测对象处理===========================
                 if len(preds_img) != 0:
                     if self.head_pose:
-                        masks_list.clear()
+                        pose_list.clear()  # 清空姿态列表
                         emoji_available_list.clear()
                     for i in range(preds_img.shape[0]):
                         if self.opt.tracking:
@@ -175,8 +176,15 @@ class DataDealer:
                             # ====指标====脸部遮挡检测=======
                             if self_state is not None:
                                 self.face_hide(self_state, reid_global_states, face_naked)
-                            # ====进行头部姿态估计=====
-                            self.estimate_head_pose(pose_estimator, face_keypoints, masks_list)
+                            # ====进行姿态估计=====
+                            pose = {'head': self.estimate_head_pose(pose_estimator, face_keypoints),
+                                    'body': None,
+                                    'neck': self.estimate_neck_pose(pose_estimator, preds_img[i, [17, 18, 5, 6]]),
+                                    'index': i}
+                            # if all(preds_scores[i, [18, 19, 5, 6]] > 0.01):
+                            #     pose['body'] = self.estimate_body_pose(pose_estimator,
+                            #                                            preds_img[i, [18, 19, 5, 6]])
+                            pose_list.append(pose)
                             # ==口型识别== 打哈欠和说话
                             if mouth_naked > 0.5 and False:
                                 scaled_mouth_keypoints, _ = self.get_scaled_mouth_keypoints(face_keypoints)
@@ -188,6 +196,10 @@ class DataDealer:
                                 else:
                                     open_mouth = ""
                                 print(mouth_distance, open_mouth)
+                        # 动作识别相关 136关键点的动作识别
+                        # if hm_data.size()[1] == 136:
+                        #     action = action_classifier.action_classify(preds_img[i])
+                        #     print(action)
 
                     # =====开始表情识别=====
                 # =========================目标检测对象处理完成=========================
@@ -225,10 +237,8 @@ class DataDealer:
                         from alphapose.utils.vis import vis_frame, DEFAULT_FONT
                     # 开始绘图==============
                     img = vis_frame(orig_img, result, self.opt)
-                    if self.head_pose and len(masks_list) != 0:
-                        for p in masks_list:
-                            pose_estimator.draw_annotation_box(
-                                img, p[0], p[1], color=(128, 255, 128))
+                    if self.head_pose and len(pose_list) != 0:
+                        self.draw_pose(pose_estimator, img, pose_list)
                         if self.opt.tracking:
                             # 行人重识别状态
                             for _id in ids:
@@ -256,6 +266,29 @@ class DataDealer:
             self_state = {"time": time.time()}
             reid_states[idx] = self_state
         return self_state
+
+    @staticmethod
+    def draw_pose(pose_estimator, img, pose_list):
+        for pose in pose_list:
+            # pose_estimator.draw_annotation_box(
+            #     img, p[0], p[1], color=(128, 255, 128))
+            head_pose = pose['head']  # 头部姿态
+            pose_estimator.draw_axis(
+                img, head_pose[0], head_pose[1])
+            neck_pose = pose['neck']  # 颈部姿态
+            pose_estimator.draw_axis(
+                img, neck_pose[0], neck_pose[1])
+            r1 = neck_pose[0][1]
+            r2 = head_pose[0][1]
+
+            print(r1, r2, abs(r1 - r2))
+            # body_pose = pose['body']
+            # if body_pose is not None:
+            #     pose_estimator.draw_axis(
+            #         img, body_pose[0], body_pose[1])
+            #     r1 = body_pose[0][1]
+            #     r2 = head_pose[0][1]
+            #     print(abs(r1 - r2), r1, r2)
 
     @staticmethod
     def get_scaled_face_keypoints(face_keypoints):
@@ -302,15 +335,13 @@ class DataDealer:
         return mouth_distance
 
     @staticmethod
-    def estimate_head_pose(pose_estimator, face_68_keypoints, masks_list=None):
+    def estimate_head_pose(pose_estimator, face_68_keypoints):
         """
         :param pose_estimator: 姿态评估器
         :param face_68_keypoints: 人脸68关键点
         :param masks_list: 保存姿态评估结果的列表
         :return:
         """
-        if masks_list is None:
-            masks_list = []
         marks = face_68_keypoints
         marks = np.float32(marks)
         pose = pose_estimator.solve_pose(marks)
@@ -323,8 +354,49 @@ class DataDealer:
         #     steady_pose.append(ps_stb.state[0])
         # steady_pose = np.reshape(steady_pose, (-1, 3))
         # masks_list.append(steady_pose)
-        masks_list.append(pose)
-        return masks_list
+        return pose
+
+    @staticmethod
+    def estimate_body_pose(pose_estimator, body_keypoints):
+        """
+        :param body_keypoints:
+        :param pose_estimator: 姿态评估器
+        :return:
+        """
+        marks = body_keypoints
+        marks = np.float32(marks)
+        pose = pose_estimator.solve_body_pose(marks)
+        # Stabilize the pose.
+        # 这段使用卡尔曼滤波平滑结果，目前没有必要
+        # steady_pose = []
+        # pose_np = np.array(pose).flatten()
+        # for value, ps_stb in zip(pose_np, pose_stabilizers):
+        #     ps_stb.update([value])
+        #     steady_pose.append(ps_stb.state[0])
+        # steady_pose = np.reshape(steady_pose, (-1, 3))
+        # masks_list.append(steady_pose)
+        return pose
+
+    @staticmethod
+    def estimate_neck_pose(pose_estimator, neck_keypoints):
+        """
+        :param neck_keypoints:
+        :param pose_estimator: 姿态评估器
+        :return:
+        """
+        marks = neck_keypoints
+        marks = np.float32(marks)
+        pose = pose_estimator.solve_neck_pose(marks)
+        # Stabilize the pose.
+        # 这段使用卡尔曼滤波平滑结果，目前没有必要
+        # steady_pose = []
+        # pose_np = np.array(pose).flatten()
+        # for value, ps_stb in zip(pose_np, pose_stabilizers):
+        #     ps_stb.update([value])
+        #     steady_pose.append(ps_stb.state[0])
+        # steady_pose = np.reshape(steady_pose, (-1, 3))
+        # masks_list.append(steady_pose)
+        return pose
 
     @staticmethod
     def face_hide(self_state, reid_global_states, face_naked, face_hide_lambda=face_hide_lambda):
