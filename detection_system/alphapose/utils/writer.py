@@ -12,7 +12,6 @@ from alphapose.utils.pPose_nms import pose_nms, write_json
 from alphapose.utils.transforms import get_func_heatmap_to_coord
 from kp_analysis import action_analysis
 from pose_estimation.pose_estimator import PoseEstimator
-from pose_estimation.stabilizer import Stabilizer
 
 DEFAULT_VIDEO_SAVE_OPT = {
     'savepath': 'examples/res/1.mp4',
@@ -90,15 +89,13 @@ class DataDealer:
         # ======头部姿态估计准备=========
         if self.head_pose:
             # 进行头部姿态估计
-            pose_estimator = PoseEstimator(img_size=self.opt.img_size)
+            self.pose_estimator = PoseEstimator(img_size=self.opt.img_size)
             # Introduce scalar stabilizers for pose.
-            pose_stabilizers = [Stabilizer(
-                state_num=2,
-                measure_num=1,
-                cov_process=0.1,
-                cov_measure=0.1) for _ in range(6)]
-            pose_list = []  # 姿态列表
-            emoji_available_list = []  # 需要进行表情识别的目标的索引
+            # pose_stabilizers = [Stabilizer(
+            #     state_num=2,
+            #     measure_num=1,
+            #     cov_process=0.1,
+            #     cov_measure=0.1) for _ in range(6)]
 
             face_naked_rate = []  # 所有人的脸部露出率
         # keep looping infinitelyd
@@ -151,64 +148,10 @@ class DataDealer:
                         preds_img = torch.stack(preds_img)
                 # print(boxes[0], cropped_boxes[0],hm_data[0].shape)
                 # =========================目标检测对象处理===========================
-                # 伸手识别处理
-                stretch_out_degree_L, stretch_out_degree_R = action_analysis.stretch_out_degree(preds_img)
-                if action_analysis.is_stretch_out(stretch_out_degree_L)[0]:
-                    print("伸左手")
-                if action_analysis.is_stretch_out(stretch_out_degree_R)[0]:
-                    print("伸右手")
                 if len(preds_img) != 0:
-                    if self.head_pose:
-                        pose_list.clear()  # 清空姿态列表
-                        emoji_available_list.clear()
-                    for i in range(preds_img.shape[0]):
-                        if self.opt.tracking:
-                            self_state = self.get_reid_state(ids[i], reid_states, reid_global_states)
-                            self_state['index'] = i
-
-                        # ===头部姿态估计相关======
-                        if self.head_pose:
-                            # 取出脸部关键点
-                            face_keypoints = preds_img[i, 26:94]
-                            face_keypoints_scores = preds_scores[i, 26:94]
-                            # 获取标准化后的人脸关键点坐标
-                            # scale_face_keypoints, _ = self.get_scaled_face_keypoints(face_keypoints)
-                            # =====脸部露出判定======
-                            face_naked = torch.sum(face_keypoints_scores[27:48] > 0.01) / 21  # 这部分暂时不包括嘴部数据
-                            mouth_naked = torch.sum(face_keypoints_scores[48:68] > 0.1) / 20  # 这部分是嘴部的裸露程度
-                            if face_naked > 0.5 or mouth_naked > 0.5:
-                                # 判断是否能够识别表情
-                                emoji_available_list.append(i)
-
-                            # ====指标====脸部遮挡检测=======
-                            if self_state is not None:
-                                self.face_hide(self_state, reid_global_states, face_naked)
-                            # ====进行姿态估计=====
-                            pose = {'head': self.estimate_head_pose(pose_estimator, face_keypoints),
-                                    'body': None,
-                                    'neck': self.estimate_neck_pose(pose_estimator, preds_img[i, [17, 18, 5, 6]]),
-                                    'index': i}
-                            # if all(preds_scores[i, [18, 19, 5, 6]] > 0.01):
-                            #     pose['body'] = self.estimate_body_pose(pose_estimator,
-                            #     preds_img[i, [18, 19, 5, 6]])
-                            pose_list.append(pose)
-                            # ==口型识别== 打哈欠和说话
-                            if mouth_naked > 0.5 and False:
-                                scaled_mouth_keypoints, _ = self.get_scaled_mouth_keypoints(face_keypoints)
-                                mouth_distance = self.mouth_open_degree(scaled_mouth_keypoints)
-                                if mouth_distance[1] > 0.3:
-                                    open_mouth = "open mouth!!!!"
-                                elif mouth_distance[1] > 0.2:
-                                    open_mouth = "open"
-                                else:
-                                    open_mouth = ""
-                                print(mouth_distance, open_mouth)
-                        # 动作识别相关 136关键点的动作识别
-                        # if hm_data.size()[1] == 136:
-                        #     action = action_classifier.action_classify(preds_img[i])
-                        #     print(action)
-                        # =====伸手识别=====
-                    # =====开始表情识别=====
+                    self.deal_objects(boxes, scores, ids, hm_data,
+                                      cropped_boxes, orig_img, im_name,
+                                      preds_img, preds_scores)
                 # =========================目标检测对象处理完成=========================
                 # =========================整理数据========================
                 _result = []
@@ -243,9 +186,10 @@ class DataDealer:
                     else:
                         from alphapose.utils.vis import vis_frame, DEFAULT_FONT
                     # 开始绘图==============
+                    pose_list = self.pose_list
                     img = vis_frame(orig_img, result, self.opt)
                     if self.head_pose and len(pose_list) != 0:
-                        self.draw_pose(pose_estimator, img, pose_list)
+                        self.draw_pose(self.pose_estimator, img, pose_list)
                         if self.opt.tracking:
                             # 行人重识别状态
                             for _id in ids:
@@ -258,6 +202,62 @@ class DataDealer:
                                             1, (255, 0, 0), 2)
                     # 结束绘图==============》显示图片
                     self.write_image(img, im_name, stream=stream if self.save_video else None)
+
+    def deal_objects(self, boxes, scores, ids, hm_data,
+                     cropped_boxes, orig_img, im_name,
+                     preds_img, preds_scores):
+        """
+        处理识别出来的目标
+        """
+        object_num = preds_img.shape[0]  # 目标数量
+        # 伸手识别处理
+        print(action_analysis.is_passing(preds_img))
+        reid_global_states = self.reid_global_states
+        indexes = torch.arange(0, len(preds_img))  # 辅助索引
+        if self.head_pose:  # 头部姿态估计
+            self.emoji_available_list = []  # 判断是否要识别表情
+            # 取出脸部关键点
+            face_keypoints = preds_img[:, 26:94]
+            face_keypoints_scores = preds_scores[:, 26:94]
+            # =====脸部露出判定======
+            naked_faces = torch.sum(face_keypoints_scores[:, 27:48, 0] > 0.01,
+                                    dim=1) / 21  # 这部分暂时不包括嘴部数据
+            naked_mouths = torch.sum(face_keypoints_scores[:, 48:68, 0] > 0.1,
+                                     dim=1) / 20  # 这部分是嘴部的裸露程度
+            # 判断是否能够识别表情
+            self.emoji_available_list.extend(indexes[(naked_faces > 0.5) & (naked_mouths > 0.5)])
+            # 头部姿态估计 也包括其他姿态估计
+            pose_estimator = self.pose_estimator
+            self.pose_list = [{'head': self.estimate_head_pose(pose_estimator, face_keypoints[i]),
+                               'body': None,
+                               'neck': self.estimate_neck_pose(pose_estimator, preds_img[i, [17, 18, 5, 6]]),
+                               'index': i}
+                              for i in range(object_num)]
+        for i in range(object_num):
+            if self.opt.tracking:
+                self_state = self.get_reid_state(ids[i], self.reid_states, reid_global_states)
+                self_state['index'] = i
+            if self.head_pose:
+                # ====指标====脸部遮挡检测=======
+                if self_state is not None:
+                    self.face_hide(self_state, reid_global_states, naked_faces[i])
+                # ==口型识别== 打哈欠和说话
+                if naked_mouths[i] > 0.5 and False:
+                    scaled_mouth_keypoints, _ = self.get_scaled_mouth_keypoints(face_keypoints)
+                    mouth_distance = self.mouth_open_degree(scaled_mouth_keypoints)
+                    if mouth_distance[1] > 0.3:
+                        open_mouth = "open mouth!!!!"
+                    elif mouth_distance[1] > 0.2:
+                        open_mouth = "open"
+                    else:
+                        open_mouth = ""
+                    print(mouth_distance, open_mouth)
+            # 动作识别相关 136关键点的动作识别
+            # if hm_data.size()[1] == 136:
+            #     action = action_classifier.action_classify(preds_img[i])
+            #     print(action)
+            # =====伸手识别=====
+        # =====开始表情识别=====
 
     @staticmethod
     def get_reid_state(idx, reid_states, reid_global_states):

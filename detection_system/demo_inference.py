@@ -91,6 +91,8 @@ parser.add_argument('--pose_flow', dest='pose_flow',
                     help='track humans in video with PoseFlow', action='store_true', default=False)
 parser.add_argument('--pose_track', dest='pose_track',
                     help='track humans in video with reid', action='store_true', default=True)  # 原False
+parser.add_argument('--scene_mask', dest='scene_mask',
+                    help='场景遮罩', default="examples/scene_mask.jpg")
 
 args = parser.parse_args()
 cfg = update_config(args.cfg)

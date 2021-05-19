@@ -56,11 +56,11 @@ Download the object detection model manually: **yolov3-spp.weights**([Google Dri
 
 - detection_system/face_recog/weights
 
-**人脸对齐**：dlib_face_recognition_resnet_model_v1.dat
+**人脸对齐**：shape_predictor_68_face_landmarks.dat
 
 - detection_system/face_recog/weights
 
-**作弊动作分类器**：cheating_detector_rfc_kp.pkl、
+**作弊动作分类器**：cheating_detector_rfc_kp.pkl
 
 - detection_system/weights
 
