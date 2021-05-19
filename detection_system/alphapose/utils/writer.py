@@ -10,6 +10,7 @@ import torch.multiprocessing as mp
 
 from alphapose.utils.pPose_nms import pose_nms, write_json
 from alphapose.utils.transforms import get_func_heatmap_to_coord
+from kp_analysis import action_analysis
 from pose_estimation.pose_estimator import PoseEstimator
 from pose_estimation.stabilizer import Stabilizer
 
@@ -150,6 +151,12 @@ class DataDealer:
                         preds_img = torch.stack(preds_img)
                 # print(boxes[0], cropped_boxes[0],hm_data[0].shape)
                 # =========================目标检测对象处理===========================
+                # 伸手识别处理
+                stretch_out_degree_L, stretch_out_degree_R = action_analysis.stretch_out_degree(preds_img)
+                if action_analysis.is_stretch_out(stretch_out_degree_L)[0]:
+                    print("伸左手")
+                if action_analysis.is_stretch_out(stretch_out_degree_R)[0]:
+                    print("伸右手")
                 if len(preds_img) != 0:
                     if self.head_pose:
                         pose_list.clear()  # 清空姿态列表
@@ -183,7 +190,7 @@ class DataDealer:
                                     'index': i}
                             # if all(preds_scores[i, [18, 19, 5, 6]] > 0.01):
                             #     pose['body'] = self.estimate_body_pose(pose_estimator,
-                            #                                            preds_img[i, [18, 19, 5, 6]])
+                            #     preds_img[i, [18, 19, 5, 6]])
                             pose_list.append(pose)
                             # ==口型识别== 打哈欠和说话
                             if mouth_naked > 0.5 and False:
@@ -200,7 +207,7 @@ class DataDealer:
                         # if hm_data.size()[1] == 136:
                         #     action = action_classifier.action_classify(preds_img[i])
                         #     print(action)
-
+                        # =====伸手识别=====
                     # =====开始表情识别=====
                 # =========================目标检测对象处理完成=========================
                 # =========================整理数据========================
@@ -281,7 +288,7 @@ class DataDealer:
             r1 = neck_pose[0][1]
             r2 = head_pose[0][1]
 
-            print(r1, r2, abs(r1 - r2))
+            # print(r1, r2, abs(r1 - r2))
             # body_pose = pose['body']
             # if body_pose is not None:
             #     pose_estimator.draw_axis(
