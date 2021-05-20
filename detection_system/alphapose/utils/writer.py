@@ -1,5 +1,4 @@
 import os
-import time
 from queue import Queue
 from threading import Thread
 
@@ -12,6 +11,8 @@ from alphapose.utils.pPose_nms import pose_nms, write_json
 from alphapose.utils.transforms import get_func_heatmap_to_coord
 from kp_analysis import action_analysis
 from pose_estimation.pose_estimator import PoseEstimator
+from utils.reid_states import ReIDStates
+from utils.scene_masker import SceneMasker
 
 DEFAULT_VIDEO_SAVE_OPT = {
     'savepath': 'examples/res/1.mp4',
@@ -22,9 +23,8 @@ DEFAULT_VIDEO_SAVE_OPT = {
 
 EVAL_JOINTS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 
-reid_loss_interval = 5  # 单位秒
 face_hide_refresh_interval = 1.5  # 单位秒
-face_hide_lambda = 0.75
+default_face_hide_lambda = 0.25
 
 
 class DataDealer:
@@ -54,8 +54,9 @@ class DataDealer:
             from trackers.PoseFlow.poseflow_infer import PoseFlowWrapper
             self.pose_flow_wrapper = PoseFlowWrapper(save_path=os.path.join(opt.outputpath, 'poseflow'))
         if opt.tracking:  # 实例状态
-            self.reid_states = {}
-            self.reid_global_states = {'frame': 0, "interval": 1, "time": time.time()}
+            self.reid_states = ReIDStates()
+        # 是否使用场景蒙版
+        self.scene_mask = SceneMasker(opt.scene_mask) if opt.scene_mask else None
 
     def start_worker(self, target):
         if self.opt.sp:
@@ -101,12 +102,7 @@ class DataDealer:
         # keep looping infinitelyd
         while True:
             if self.opt.tracking:  # 处理重识别状态
-                reid_states = self.reid_states
-                reid_global_states = self.reid_global_states
-                reid_global_states["frame"] = (reid_global_states["frame"] + 1) % 9999
-                current_time = time.time()
-                reid_global_states["interval"] = current_time - reid_global_states['time']
-                reid_global_states['time'] = current_time
+                self.reid_states.next_frame()
             # ensure the queue is not empty and get item
             (boxes, scores, ids, hm_data, cropped_boxes, orig_img, im_name) = self.wait_and_get(self.result_queue)
             if orig_img is None:
@@ -149,7 +145,7 @@ class DataDealer:
                 # print(boxes[0], cropped_boxes[0],hm_data[0].shape)
                 # =========================目标检测对象处理===========================
                 if len(preds_img) != 0:
-                    self.deal_objects(boxes, scores, ids, hm_data,
+                    self.deal_objects(np.stack(boxes), scores, ids, hm_data,
                                       cropped_boxes, orig_img, im_name,
                                       preds_img, preds_scores)
                 # =========================目标检测对象处理完成=========================
@@ -193,13 +189,16 @@ class DataDealer:
                         if self.opt.tracking:
                             # 行人重识别状态
                             for _id in ids:
-                                _state = reid_states[_id]
+                                _state = self.reid_states[_id]
                                 index = _state['index']
                                 bbox = _result[index]['box']
                                 bbox = [bbox[0], bbox[0] + bbox[2], bbox[1], bbox[1] + bbox[3]]
                                 cv2.putText(img, f'no focus: {round(_state["face_hide_rate"], 2)}',
                                             (int(bbox[0]), int((bbox[2] + 52))), DEFAULT_FONT,
                                             1, (255, 0, 0), 2)
+
+                    if self.scene_mask:
+                        img = self.scene_mask.mask_on_img(img)
                     # 结束绘图==============》显示图片
                     self.write_image(img, im_name, stream=stream if self.save_video else None)
 
@@ -211,10 +210,11 @@ class DataDealer:
         """
         object_num = preds_img.shape[0]  # 目标数量
         # 伸手识别处理
-        print(action_analysis.is_passing(preds_img))
-        reid_global_states = self.reid_global_states
+        # print(action_analysis.is_passing(preds_img))
+        # 场景位置识别 场景遮罩
+        print(self.scene_mask.is_in_seat(boxes))
         indexes = torch.arange(0, len(preds_img))  # 辅助索引
-        if self.head_pose:  # 头部姿态估计
+        if self.head_pose:  # 头部状态估计
             self.emoji_available_list = []  # 判断是否要识别表情
             # 取出脸部关键点
             face_keypoints = preds_img[:, 26:94]
@@ -233,14 +233,15 @@ class DataDealer:
                                'neck': self.estimate_neck_pose(pose_estimator, preds_img[i, [17, 18, 5, 6]]),
                                'index': i}
                               for i in range(object_num)]
+        # 逐个处理
         for i in range(object_num):
             if self.opt.tracking:
-                self_state = self.get_reid_state(ids[i], self.reid_states, reid_global_states)
+                self_state = self.reid_states[ids[i]]
                 self_state['index'] = i
             if self.head_pose:
                 # ====指标====脸部遮挡检测=======
                 if self_state is not None:
-                    self.face_hide(self_state, reid_global_states, naked_faces[i])
+                    self.face_hide(ids[i], naked_faces[i])
                 # ==口型识别== 打哈欠和说话
                 if naked_mouths[i] > 0.5 and False:
                     scaled_mouth_keypoints, _ = self.get_scaled_mouth_keypoints(face_keypoints)
@@ -258,21 +259,6 @@ class DataDealer:
             #     print(action)
             # =====伸手识别=====
         # =====开始表情识别=====
-
-    @staticmethod
-    def get_reid_state(idx, reid_states, reid_global_states):
-        # 获取重识别状态
-        if idx in reid_states:
-            self_state = reid_states[idx]
-            if (reid_global_states['time'] - self_state['time']) > reid_loss_interval:
-                self_state = {"time": time.time()}
-                reid_states[idx] = self_state
-            else:
-                self_state['time'] = time.time()
-        else:
-            self_state = {"time": time.time()}
-            reid_states[idx] = self_state
-        return self_state
 
     @staticmethod
     def draw_pose(pose_estimator, img, pose_list):
@@ -405,30 +391,28 @@ class DataDealer:
         # masks_list.append(steady_pose)
         return pose
 
-    @staticmethod
-    def face_hide(self_state, reid_global_states, face_naked, face_hide_lambda=face_hide_lambda):
+    def face_hide(self, reid, face_naked, face_hide_lambda=default_face_hide_lambda):
         """
 
-        :param self_state: 目标的状态对象
-        :param reid_global_states: 全局的状态对象
-        :param face_naked: 人脸裸露率
+        :param reid: 目标的重识别id
+        :param face_naked: 人脸露出率
         :param face_hide_lambda: 平滑人脸遮挡率
         :return: 修改后的状态字典
         """
-        face_hide_time = self_state.get("face_hide_time", 0)
+
         if face_naked < 0.5:
-            face_hide_time += reid_global_states['interval']
+            face_hide_time = self.reid_states.timer_set(reid, "face_hide_time")
         else:
+            self.reid_states.timer_reset(reid, "face_hide_time")
             face_hide_time = 0
         # 动态遮挡率
-        face_hide_rate = self_state.get("face_hide_rate", 0)
         if face_hide_time > face_hide_refresh_interval:
-            face_hide_rate = (1 - face_hide_lambda) + face_hide_lambda * face_hide_rate
+            face_hide_rate = self.reid_states.smooth_set(reid, "face_hide_rate", 1, face_hide_lambda)
         elif face_hide_time == 0:
-            face_hide_rate = face_hide_lambda * face_hide_rate
-        self_state["face_hide_time"] = face_hide_time
-        self_state["face_hide_rate"] = face_hide_rate
-        return self_state
+            face_hide_rate = self.reid_states.smooth_set(reid, "face_hide_rate", 0, face_hide_lambda)
+        else:
+            face_hide_rate = self.reid_states.get(reid, "face_hide_rate")
+        return face_hide_rate
 
     def write_image(self, img, im_name, stream=None):
         if self.opt.vis:

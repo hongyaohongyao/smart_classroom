@@ -1,5 +1,7 @@
 examples/res/*
 
+!examples/scene_mask.png
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
