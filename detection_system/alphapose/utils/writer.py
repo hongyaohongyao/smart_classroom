@@ -9,6 +9,7 @@ import torch.multiprocessing as mp
 
 from alphapose.utils.pPose_nms import pose_nms, write_json
 from alphapose.utils.transforms import get_func_heatmap_to_coord
+from kp_analysis import action_analysis, action_classifier
 from pose_estimation.pose_estimator import PoseEstimator
 from utils.attention_by_expression_angle import attention_degrees
 from utils.reid_states import ReIDStates
@@ -18,7 +19,7 @@ DEFAULT_VIDEO_SAVE_OPT = {
     'savepath': 'examples/res/1.mp4',
     'fourcc': cv2.VideoWriter_fourcc(*'mp4v'),
     'fps': 25,
-    'frameSize': (640, 480)
+    'frameSize': (800, 480)
 }
 
 EVAL_JOINTS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
@@ -204,8 +205,7 @@ class DataDealer:
         处理识别出来的目标
         """
         object_num = preds_img.shape[0]  # 目标数量
-        # 伸手识别处理
-        # print(action_analysis.is_passing(preds_img))
+
         # 场景位置识别 场景遮罩
         # print(self.scene_mask.is_in_seat(boxes))
         indexes = torch.arange(0, len(preds_img))  # 辅助索引
@@ -231,6 +231,16 @@ class DataDealer:
             if self.opt.analyse_focus:
                 self.angles = [pose['head'][0][0][0] * 90 for pose in self.pose_list]
                 self.attention_scores = attention_degrees(face_keypoints, self.angles)
+            if self.opt.analyse_cheating:
+                # 伸手识别处理
+                self.is_passing = action_analysis.is_passing(preds_img)
+                self.passing_tips = [
+                    "left" if p == 1 else "right" if p == -1 else 'no'
+                    for p in self.is_passing
+                ]
+                self.actions = action_classifier.action_classify(preds_img)
+                self.actions_texts = [action_classifier.action_type[i] for i in self.actions]
+                self.actions_colors = [(255, 0, 0) if i <= 3 else (0, 0, 255) for i in self.actions]
         # 逐个处理
         for i in range(object_num):
             if self.opt.tracking:
@@ -238,7 +248,7 @@ class DataDealer:
                 self_state['index'] = i
             if self.head_pose:
                 # ====指标====脸部遮挡检测=======
-                if self_state is not None:
+                if self_state is not None and self.opt.analyse_focus:
                     self.focus_rates(ids[i], self.attention_scores[i], naked_faces[i])
                 # ==口型识别== 打哈欠和说话
                 if naked_mouths[i] > 0.5 and False:
@@ -251,10 +261,6 @@ class DataDealer:
                     else:
                         open_mouth = ""
                     print(mouth_distance, open_mouth)
-            # 动作识别相关 136关键点的动作识别
-            # if hm_data.size()[1] == 136:
-            #     action = action_classifier.action_classify(preds_img[i])
-            #     print(action)
             # =====伸手识别=====
         # =====开始表情识别=====
 
@@ -266,10 +272,25 @@ class DataDealer:
         if self.opt.analyse_focus:
             angle = round(self.angles[i], 2)
             focus_rate = round(self_state["focus_rate"], 2)
-            text = f'focus:{focus_rate};angle:{angle}'
+            text = f'focus:{focus_rate}'
             cv2.putText(img, text,
                         (int(bbox[0]), int((bbox[2] + 52))), font,
-                        1, (255, 0, 0), 2)
+                        0.6, (0, 0, 255), 2)
+            text = f'angle:{angle}'
+            cv2.putText(img, text,
+                        (int(bbox[0]), int((bbox[2] + 72))), font,
+                        0.6, (0, 0, 255), 2)
+
+        if self.opt.analyse_cheating:
+            passing_tips = f'passing: {self.passing_tips[i]}'
+            cv2.putText(img, passing_tips,
+                        (int(bbox[0]), int((bbox[2] + 52))), font,
+                        0.6, (0, 0, 255), 2)
+            action_text = self.actions_texts[i]
+            action_color = self.actions_colors[i]
+            cv2.putText(img, action_text,
+                        (int(bbox[0]), int((bbox[2] + 72))), font,
+                        0.6, action_color, 2)
 
     @staticmethod
     def draw_pose(pose_estimator, img, pose_list):
@@ -280,9 +301,9 @@ class DataDealer:
             pose_estimator.draw_axis(
                 img, head_pose[0], head_pose[1])
             neck_pose = pose['neck']  # 颈部姿态
-            pose_estimator.draw_axis(
-                img, neck_pose[0], neck_pose[1])
-            r2 = head_pose[0][1]
+            # pose_estimator.draw_axis(
+            #     img, neck_pose[0], neck_pose[1])
+            # r2 = head_pose[0][1]
             # print(head_pose[0][0], head_pose[0][1], head_pose[0][2])
 
             # print(r1, r2, abs(r1 - r2))

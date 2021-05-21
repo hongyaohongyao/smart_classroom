@@ -71,7 +71,7 @@ parser.add_argument('--eval', dest='eval', default=False, action='store_true',
 parser.add_argument('--gpus', type=str, dest='gpus', default="0",
                     help='choose which cuda device to use by index and input comma to use multi gpus, e.g. 0,1,2,'
                          '3. (input -1 for cpu only)')
-parser.add_argument('--qsize', type=int, dest='qsize', default=1024,
+parser.add_argument('--qsize', type=int, dest='qsize', default=32,
                     help='the length of result buffer, where reducing it will lower requirement of cpu memory')
 parser.add_argument('--flip', default=False, action='store_true',
                     help='enable flip testing')
@@ -96,7 +96,9 @@ parser.add_argument('--scene_mask', dest='scene_mask',
 parser.add_argument('--show_scene_mask', dest='show_scene_mask',
                     help='是否展示场景遮罩', action='store_true', default=False)
 parser.add_argument('--analyse_focus', dest='analyse_focus',
-                    help='是否分析专注度', action='store_true', default=True)
+                    help='是否分析专注度', action='store_true', default=False)
+parser.add_argument('--analyse_cheating', dest='analyse_cheating',
+                    help='是否在作弊', action='store_true', default=True)
 
 args = parser.parse_args()
 cfg = update_config(args.cfg)

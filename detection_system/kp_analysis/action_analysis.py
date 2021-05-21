@@ -13,7 +13,7 @@ def stretch_out_degree(keypoints, left=True, right=True):
     """
     result = []
     if left:
-        shoulder_vec = keypoints[:, 18] - keypoints[:, 5]
+        shoulder_vec = keypoints[:, 6] - keypoints[:, 5]
         arm_vec = keypoints[:, 5] - keypoints[:, 7]
         forearm_vec = keypoints[:, 7] - keypoints[:, 9]
         _results = torch.hstack([torch.cosine_similarity(shoulder_vec, arm_vec).unsqueeze(1),
@@ -21,7 +21,7 @@ def stretch_out_degree(keypoints, left=True, right=True):
                                  torch.cosine_similarity(arm_vec, forearm_vec).unsqueeze(1)])
         result.append(_results)
     if right:
-        shoulder_vec = keypoints[:, 18] - keypoints[:, 6]
+        shoulder_vec = keypoints[:, 5] - keypoints[:, 6]
         arm_vec = keypoints[:, 6] - keypoints[:, 8]
         forearm_vec = keypoints[:, 8] - keypoints[:, 10]
         _results = torch.hstack([torch.cosine_similarity(shoulder_vec, arm_vec).unsqueeze(1),
@@ -40,7 +40,7 @@ def is_stretch_out(degree, threshold=None, dim=1):
     :return:
     """
     if threshold is None:
-        threshold = torch.tensor([0.8, 0.8, 0.5])
+        threshold = torch.tensor([0.6, 0.6, 0.5])
     return torch.all(degree > threshold, dim=dim)
 
 
@@ -70,7 +70,7 @@ def is_raise_hand(keypoints):
     :param keypoints: keypoints: Halpe 26 keypoints 或 136关键点 [N,keypoints]
     :return: [N,[左手举手?,右手举手?]]
     """
-    return keypoints[:, 17, 1] > keypoints[:, [9, 10], 1]
+    return keypoints[:, [17], 1] > keypoints[:, [9, 10], 1]
 # ==================
 # 基于关键点的转头识别部分
 # ==================
