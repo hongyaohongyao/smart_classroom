@@ -1,6 +1,7 @@
 import cv2
 import dlib
 import numpy as np
+from PIL import ImageFilter, Image
 
 predictor_68_point_model = "weights/shape_predictor_68_face_landmarks.dat"
 face_recognition_model = "weights/dlib_face_recognition_resnet_model_v1.dat"
@@ -171,3 +172,30 @@ def close_eye_degree(frame, face_keypoints):
     mask = mask.reshape(1, -1)
     degree += np.sum(mask) / mask.size
     return degree
+
+
+def close_eye_degree_v2(frame, face_keypoints):
+    # 左眼
+    _, (x1, y1, x2, y2) = get_scaled_eye_keypoints(face_keypoints, 'left')
+    eye_img = frame[y1:y2, x1:x2]
+    mask = skin_detect_one_zero_matrix(eye_img)
+    mask = mask.reshape(1, -1)
+    degree = np.sum(mask) / mask.size
+    # 右眼
+    _, (x1, y1, x2, y2) = get_scaled_eye_keypoints(face_keypoints, 'right')
+    eye_img = frame[y1:y2, x1:x2]
+    mask = skin_detect_one_zero_matrix(eye_img)
+    mask = mask.reshape(1, -1)
+    degree += np.sum(mask) / mask.size
+    return degree
+
+
+def face_enhance(img):
+    img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    enhance = img.filter(ImageFilter.EDGE_ENHANCE_MORE)  # 大阈值边缘增强
+    result = cv2.cvtColor(np.asarray(enhance), cv2.COLOR_RGB2BGR)
+    gamma = 0.2
+    scale = float(np.iinfo(result.dtype).max - np.iinfo(result.dtype).min)
+    result = ((result.astype(np.float32) / scale) ** gamma) * scale  # 自适应gamma增强
+    result = np.clip(result, 0, 255).astype(np.uint8)
+    return result

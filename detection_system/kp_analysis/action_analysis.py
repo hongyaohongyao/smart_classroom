@@ -1,6 +1,9 @@
 import torch
 
 
+# ==================
+# 基于关键点的伸手识别部分
+# ==================
 def stretch_out_degree(keypoints, left=True, right=True):
     """
     :param keypoints: Halpe 26 keypoints 或 136关键点 [N,keypoints]
@@ -68,3 +71,6 @@ def is_raise_hand(keypoints):
     :return: [N,[左手举手?,右手举手?]]
     """
     return keypoints[:, 17, 1] > keypoints[:, [9, 10], 1]
+# ==================
+# 基于关键点的转头识别部分
+# ==================

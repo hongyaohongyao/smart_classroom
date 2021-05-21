@@ -142,7 +142,7 @@ class PoseEstimator:
         from mpl_toolkits.mplot3d import Axes3D
         fig = pyplot.figure()
         ax = Axes3D(fig)
-        model_points = self.neck_model_points
+        model_points = self.model_points_68
         x = model_points[:, 0]
         y = model_points[:, 1]
         z = model_points[:, 2]

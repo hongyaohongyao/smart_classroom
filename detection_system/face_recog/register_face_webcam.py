@@ -17,7 +17,7 @@ default_new_name = 'face'
 font = ImageFont.truetype("simsun.ttc", 20, encoding="utf-8")
 # 系统参数
 encoding_per_second = 5
-accept_step = 3
+accept_step = 1
 # 识别指标
 close_eye_gate = 0.2  # 闭眼的门限值
 front_face_gate = 0.15  # 非正脸的门限值
@@ -104,6 +104,8 @@ if __name__ == '__main__':
     while ret:
         # 摄像头反转
         frame = cv2.flip(frame, 1)
+        orig_frame = frame
+        # frame = face_recog.face_enhance(frame)
         # 人脸检测
         face_locations = fbl.face_location(frame).astype(int)
         face_landmarks = None
@@ -201,7 +203,7 @@ if __name__ == '__main__':
 
         # 视频显示
         # opencv不支持中文，这里使用PIL作为画板
-        frame_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        frame_pil = Image.fromarray(cv2.cvtColor(orig_frame, cv2.COLOR_BGR2RGB))
         draw = ImageDraw.Draw(frame_pil)  # 创建画板
         for x1, y1, x2, y2 in face_locations:
             # 把人脸框出来标号

@@ -9,8 +9,8 @@ import torch.multiprocessing as mp
 
 from alphapose.utils.pPose_nms import pose_nms, write_json
 from alphapose.utils.transforms import get_func_heatmap_to_coord
-from kp_analysis import action_analysis
 from pose_estimation.pose_estimator import PoseEstimator
+from utils.attention_by_expression_angle import attention_degrees
 from utils.reid_states import ReIDStates
 from utils.scene_masker import SceneMasker
 
@@ -24,7 +24,8 @@ DEFAULT_VIDEO_SAVE_OPT = {
 EVAL_JOINTS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 
 face_hide_refresh_interval = 1.5  # 单位秒
-default_face_hide_lambda = 0.25
+default_focus_lambda = 0.25
+head_pose_roll_correction = 0
 
 
 class DataDealer:
@@ -188,16 +189,10 @@ class DataDealer:
                         self.draw_pose(self.pose_estimator, img, pose_list)
                         if self.opt.tracking:
                             # 行人重识别状态
-                            for _id in ids:
-                                _state = self.reid_states[_id]
-                                index = _state['index']
-                                bbox = _result[index]['box']
-                                bbox = [bbox[0], bbox[0] + bbox[2], bbox[1], bbox[1] + bbox[3]]
-                                cv2.putText(img, f'no focus: {round(_state["face_hide_rate"], 2)}',
-                                            (int(bbox[0]), int((bbox[2] + 52))), DEFAULT_FONT,
-                                            1, (255, 0, 0), 2)
+                            for reid in ids:
+                                self.draw_objects(img, reid, _result, DEFAULT_FONT)
 
-                    if self.scene_mask:
+                    if self.scene_mask and self.opt.show_scene_mask:
                         img = self.scene_mask.mask_on_img(img)
                     # 结束绘图==============》显示图片
                     self.write_image(img, im_name, stream=stream if self.save_video else None)
@@ -212,7 +207,7 @@ class DataDealer:
         # 伸手识别处理
         # print(action_analysis.is_passing(preds_img))
         # 场景位置识别 场景遮罩
-        print(self.scene_mask.is_in_seat(boxes))
+        # print(self.scene_mask.is_in_seat(boxes))
         indexes = torch.arange(0, len(preds_img))  # 辅助索引
         if self.head_pose:  # 头部状态估计
             self.emoji_available_list = []  # 判断是否要识别表情
@@ -233,6 +228,9 @@ class DataDealer:
                                'neck': self.estimate_neck_pose(pose_estimator, preds_img[i, [17, 18, 5, 6]]),
                                'index': i}
                               for i in range(object_num)]
+            if self.opt.analyse_focus:
+                self.angles = [pose['head'][0][0][0] * 90 for pose in self.pose_list]
+                self.attention_scores = attention_degrees(face_keypoints, self.angles)
         # 逐个处理
         for i in range(object_num):
             if self.opt.tracking:
@@ -241,7 +239,7 @@ class DataDealer:
             if self.head_pose:
                 # ====指标====脸部遮挡检测=======
                 if self_state is not None:
-                    self.face_hide(ids[i], naked_faces[i])
+                    self.focus_rates(ids[i], self.attention_scores[i], naked_faces[i])
                 # ==口型识别== 打哈欠和说话
                 if naked_mouths[i] > 0.5 and False:
                     scaled_mouth_keypoints, _ = self.get_scaled_mouth_keypoints(face_keypoints)
@@ -260,6 +258,19 @@ class DataDealer:
             # =====伸手识别=====
         # =====开始表情识别=====
 
+    def draw_objects(self, img, reid, result, font):
+        self_state = self.reid_states[reid]
+        i = self_state['index']
+        bbox = result[i]['box']
+        bbox = [bbox[0], bbox[0] + bbox[2], bbox[1], bbox[1] + bbox[3]]
+        if self.opt.analyse_focus:
+            angle = round(self.angles[i], 2)
+            focus_rate = round(self_state["focus_rate"], 2)
+            text = f'focus:{focus_rate};angle:{angle}'
+            cv2.putText(img, text,
+                        (int(bbox[0]), int((bbox[2] + 52))), font,
+                        1, (255, 0, 0), 2)
+
     @staticmethod
     def draw_pose(pose_estimator, img, pose_list):
         for pose in pose_list:
@@ -271,8 +282,8 @@ class DataDealer:
             neck_pose = pose['neck']  # 颈部姿态
             pose_estimator.draw_axis(
                 img, neck_pose[0], neck_pose[1])
-            r1 = neck_pose[0][1]
             r2 = head_pose[0][1]
+            # print(head_pose[0][0], head_pose[0][1], head_pose[0][2])
 
             # print(r1, r2, abs(r1 - r2))
             # body_pose = pose['body']
@@ -391,12 +402,13 @@ class DataDealer:
         # masks_list.append(steady_pose)
         return pose
 
-    def face_hide(self, reid, face_naked, face_hide_lambda=default_face_hide_lambda):
+    def focus_rates(self, reid, attention_score, face_naked, focus_lambda=default_focus_lambda):
         """
 
+        :param attention_score:  注意力分数
         :param reid: 目标的重识别id
         :param face_naked: 人脸露出率
-        :param face_hide_lambda: 平滑人脸遮挡率
+        :param focus_lambda: 平滑专注度
         :return: 修改后的状态字典
         """
 
@@ -407,12 +419,12 @@ class DataDealer:
             face_hide_time = 0
         # 动态遮挡率
         if face_hide_time > face_hide_refresh_interval:
-            face_hide_rate = self.reid_states.smooth_set(reid, "face_hide_rate", 1, face_hide_lambda)
+            focus_rate = self.reid_states.smooth_set(reid, "focus_rate", 0, focus_lambda)
         elif face_hide_time == 0:
-            face_hide_rate = self.reid_states.smooth_set(reid, "face_hide_rate", 0, face_hide_lambda)
+            focus_rate = self.reid_states.smooth_set(reid, "focus_rate", attention_score, focus_lambda)
         else:
-            face_hide_rate = self.reid_states.get(reid, "face_hide_rate")
-        return face_hide_rate
+            focus_rate = self.reid_states.get(reid, "focus_rate")
+        return focus_rate
 
     def write_image(self, img, im_name, stream=None):
         if self.opt.vis:

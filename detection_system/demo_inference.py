@@ -93,6 +93,10 @@ parser.add_argument('--pose_track', dest='pose_track',
                     help='track humans in video with reid', action='store_true', default=True)  # 原False
 parser.add_argument('--scene_mask', dest='scene_mask',
                     help='场景遮罩', default='examples/scene_mask.png')
+parser.add_argument('--show_scene_mask', dest='show_scene_mask',
+                    help='是否展示场景遮罩', action='store_true', default=False)
+parser.add_argument('--analyse_focus', dest='analyse_focus',
+                    help='是否分析专注度', action='store_true', default=True)
 
 args = parser.parse_args()
 cfg = update_config(args.cfg)
