@@ -4,3 +4,4 @@
 *.weights
 ignore_projects/*
 *.mp4
+detection_system/examples/res/alphapose-results.json

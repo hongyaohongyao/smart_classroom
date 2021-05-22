@@ -1,4 +1,5 @@
 import os
+import time
 from queue import Queue
 from threading import Thread
 
@@ -27,11 +28,11 @@ EVAL_JOINTS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 face_hide_refresh_interval = 1.5  # 单位秒
 default_focus_lambda = 0.25
 head_pose_roll_correction = 0
-peep_angle_gate = -66  # 低头偷看的角度门限值
+peep_angle_gate = -42.02  # 低头偷看的角度门限值
 right_font_reset_interval = 10  # 头部姿态固定后，重置头部正方形的间隔时间
-turn_head_tolerance = 40  # 允许偏低正方向的角度
+turn_head_tolerance = 25.47  # 允许偏低正方向的角度
 
-cheating_turn_head_gate = 60  #
+cheating_turn_head_gate = 38.2  #
 
 
 class DataDealer:
@@ -64,6 +65,11 @@ class DataDealer:
             self.reid_states = ReIDStates()
         # 是否使用场景蒙版
         self.scene_mask = SceneMasker(opt.scene_mask) if opt.scene_mask else None
+        if self.opt.analyse_cheating and self.opt.save_cheaters:
+            try:
+                os.mkdir(os.path.join(self.opt.outputpath, 'cheating'))
+            except FileExistsError:
+                pass
 
     def start_worker(self, target):
         if self.opt.sp:
@@ -202,6 +208,8 @@ class DataDealer:
                         img = self.scene_mask.mask_on_img(img)
                     # 结束绘图==============》显示图片
                     self.write_image(img, im_name, stream=stream if self.save_video else None)
+                    if self.opt.analyse_cheating and self.opt.save_cheaters:
+                        self.save_cheaters(img, boxes, ids, self.cheating_indexs)
 
     def deal_objects(self, boxes, scores, ids, hm_data,
                      cropped_boxes, orig_img, im_name,
@@ -234,8 +242,9 @@ class DataDealer:
                                'index': i}
                               for i in range(object_num)]
             if self.opt.analyse_focus or self.opt.analyse_cheating:
-                self.angles_pitch = [pose['head'][0][0][0] * 90 for pose in self.pose_list]
-                self.angles_yaw = [pose['head'][0][1][0] * 90 for pose in self.pose_list]
+                self.angles_pitch = [pose['head'][0][0][0] * 57.3 for pose in self.pose_list]
+                # self.angles_yaw = [pose['head'][0][1][0] * 57.3 for pose in self.pose_list]
+                self.angles_yaw = [action_analysis.turn_head_angle(*pose['head']) * 57.3 for pose in self.pose_list]
             if self.opt.analyse_focus:  # 是否分析专注度
                 self.attention_scores = attention_degrees(face_keypoints, self.angles_roll)
             if self.opt.analyse_cheating:
@@ -259,9 +268,12 @@ class DataDealer:
 
                 # 转头识别
                 if self.opt.tracking:
-                    self.probes = [self.turn_head_rate(ids[i], i) > cheating_turn_head_gate for i in indexes]
+                    # self.probes = [self.turn_head_rate(ids[i], i) > cheating_turn_head_gate for i in indexes]
+                    self.probes = torch.tensor([a > cheating_turn_head_gate for a in self.angles_yaw])
                     self.probe_texts = ['yes' if p else 'no' for p in self.probes]
                     self.probe_colors = [(0, 0, 255) if p else (255, 0, 0) for p in self.probes]
+                if self.opt.save_cheaters:
+                    self.cheating_indexs = indexes[self.probes | self.peeps | (self.is_passing != 0)]
         # 逐个处理
         for i in range(object_num):
             if self.opt.tracking:
@@ -321,11 +333,6 @@ class DataDealer:
                         (int(bbox[0]), int((bbox[2] + text_pos))), font,
                         text_scale, passing_color, text_width)
             text_pos += text_gap
-            # angle_pitch = f'angle_pitch:{round(self.angles_pitch[i], 2)}'
-            # cv2.putText(img, angle_pitch,
-            #             (int(bbox[0]), int((bbox[2] + text_pos))), font,
-            #             text_scale, (0, 255, 0), text_width)
-            # text_pos += text_gap
             peep_text = f'peep: {self.peep_texts[i]}'
             peep_color = self.peep_colors[i]
             cv2.putText(img, peep_text,
@@ -333,17 +340,29 @@ class DataDealer:
                         text_scale, peep_color, text_width)
             text_pos += text_gap
             if self.opt.tracking:
-                # probe_text = f'probe: {self.probe_texts[i]}'
-                # probe_color = self.probe_colors[i]
-                # cv2.putText(img, probe_text,
-                #             (int(bbox[0]), int((bbox[2] + text_pos))), font,
-                #             text_scale, probe_color, text_width)
-                # text_pos += text_gap
-                angle_yaw = f'angle_yaw:{round(self.angles_yaw[i], 2)}'
-                cv2.putText(img, angle_yaw,
+                probe_text = f'probe: {self.probe_texts[i]}'
+                probe_color = self.probe_colors[i]
+                cv2.putText(img, probe_text,
                             (int(bbox[0]), int((bbox[2] + text_pos))), font,
-                            text_scale, (20, 255, 20), text_width)
+                            text_scale, probe_color, text_width)
                 text_pos += text_gap
+                # angle_yaw = f'angle_yaw:{round(self.angles_yaw[i], 2)}'
+                # cv2.putText(img, angle_yaw,
+                #             (int(bbox[0]), int((bbox[2] + text_pos))), font,
+                #             text_scale, (20, 255, 20), text_width)
+                # text_pos += text_gap
+                # angle_pitch = f'angle_pitch:{round(self.angles_pitch[i], 2)}'
+                # cv2.putText(img, angle_pitch,
+                #             (int(bbox[0]), int((bbox[2] + text_pos))), font,
+                #             text_scale, (0, 255, 0), text_width)
+                # text_pos += text_gap
+
+    def save_cheaters(self, img, boxes, ids, cheating_indexs):
+        save_time_str = time.strftime('%Y%m%d%H%M%S')
+        for i in cheating_indexs:
+            box = boxes[i].astype(int)
+            chipped_img = img[box[1]:box[3], box[0]:box[2]]
+            cv2.imwrite(os.path.join(self.opt.outputpath, 'cheating', f'{save_time_str}_{ids[i]}.jpg'), chipped_img)
 
     @staticmethod
     def draw_pose(pose_estimator, img, pose_list):
@@ -353,11 +372,10 @@ class DataDealer:
             head_pose = pose['head']  # 头部姿态
             pose_estimator.draw_axis(
                 img, head_pose[0], head_pose[1])
-            neck_pose = pose['neck']  # 颈部姿态
+            # neck_pose = pose['neck']  # 颈部姿态
             # pose_estimator.draw_axis(
             #     img, neck_pose[0], neck_pose[1])
-            # r2 = head_pose[0][1]
-            # print(head_pose[0][0], head_pose[0][1], head_pose[0][2])
+            # print(action_analysis.turn_head_angle(*head_pose))
 
             # print(r1, r2, abs(r1 - r2))
             # body_pose = pose['body']

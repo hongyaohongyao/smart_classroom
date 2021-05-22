@@ -24,6 +24,8 @@ from trackers import track
 from trackers.tracker_api import Tracker
 from trackers.tracker_cfg import cfg as tcfg
 
+# cv2.setNumThreads(0)  # 设置opencv单线程运行
+
 """----------------------------- Demo options -----------------------------"""
 parser = argparse.ArgumentParser(description='AlphaPose Demo')
 # parser.add_argument('--cfg', type=str, default='../configs/coco/resnet/256x192_res50_lr1e-3_1x.yaml',
@@ -71,7 +73,7 @@ parser.add_argument('--eval', dest='eval', default=False, action='store_true',
 parser.add_argument('--gpus', type=str, dest='gpus', default="0",
                     help='choose which cuda device to use by index and input comma to use multi gpus, e.g. 0,1,2,'
                          '3. (input -1 for cpu only)')
-parser.add_argument('--qsize', type=int, dest='qsize', default=32,
+parser.add_argument('--qsize', type=int, dest='qsize', default=20,
                     help='the length of result buffer, where reducing it will lower requirement of cpu memory')
 parser.add_argument('--flip', default=False, action='store_true',
                     help='enable flip testing')
@@ -99,6 +101,10 @@ parser.add_argument('--analyse_focus', dest='analyse_focus',
                     help='是否分析专注度', action='store_true', default=False)
 parser.add_argument('--analyse_cheating', dest='analyse_cheating',
                     help='是否在作弊', action='store_true', default=True)
+parser.add_argument('--show_keypoints', dest='show_keypoints',
+                    help='是否展示关键点', action='store_true', default=False)
+parser.add_argument('--save_cheaters', dest='save_cheaters',
+                    help='是否保存作弊人员图像', action='store_true', default=False)
 
 args = parser.parse_args()
 cfg = update_config(args.cfg)
