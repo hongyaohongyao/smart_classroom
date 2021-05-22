@@ -9,7 +9,7 @@ import torch.multiprocessing as mp
 
 from alphapose.utils.pPose_nms import pose_nms, write_json
 from alphapose.utils.transforms import get_func_heatmap_to_coord
-from kp_analysis import action_analysis, action_classifier
+from kp_analysis import action_analysis
 from pose_estimation.pose_estimator import PoseEstimator
 from utils.attention_by_expression_angle import attention_degrees
 from utils.reid_states import ReIDStates
@@ -18,7 +18,7 @@ from utils.scene_masker import SceneMasker
 DEFAULT_VIDEO_SAVE_OPT = {
     'savepath': 'examples/res/1.mp4',
     'fourcc': cv2.VideoWriter_fourcc(*'mp4v'),
-    'fps': 25,
+    'fps': 12,
     'frameSize': (800, 480)
 }
 
@@ -27,6 +27,11 @@ EVAL_JOINTS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 face_hide_refresh_interval = 1.5  # 单位秒
 default_focus_lambda = 0.25
 head_pose_roll_correction = 0
+peep_angle_gate = -66  # 低头偷看的角度门限值
+right_font_reset_interval = 10  # 头部姿态固定后，重置头部正方形的间隔时间
+turn_head_tolerance = 40  # 允许偏低正方向的角度
+
+cheating_turn_head_gate = 60  #
 
 
 class DataDealer:
@@ -228,19 +233,35 @@ class DataDealer:
                                'neck': self.estimate_neck_pose(pose_estimator, preds_img[i, [17, 18, 5, 6]]),
                                'index': i}
                               for i in range(object_num)]
-            if self.opt.analyse_focus:
-                self.angles = [pose['head'][0][0][0] * 90 for pose in self.pose_list]
-                self.attention_scores = attention_degrees(face_keypoints, self.angles)
+            if self.opt.analyse_focus or self.opt.analyse_cheating:
+                self.angles_pitch = [pose['head'][0][0][0] * 90 for pose in self.pose_list]
+                self.angles_yaw = [pose['head'][0][1][0] * 90 for pose in self.pose_list]
+            if self.opt.analyse_focus:  # 是否分析专注度
+                self.attention_scores = attention_degrees(face_keypoints, self.angles_roll)
             if self.opt.analyse_cheating:
+                # self.actions = action_classifier.action_classify(preds_img)
+                # self.actions_texts = [action_classifier.action_type[i] for i in self.actions]
+                # self.actions_colors = [(255, 0, 0) if i <= 3 else (0, 0, 255) for i in self.actions]
                 # 伸手识别处理
                 self.is_passing = action_analysis.is_passing(preds_img)
-                self.passing_tips = [
+                self.passing_texts = [
                     "left" if p == 1 else "right" if p == -1 else 'no'
                     for p in self.is_passing
                 ]
-                self.actions = action_classifier.action_classify(preds_img)
-                self.actions_texts = [action_classifier.action_type[i] for i in self.actions]
-                self.actions_colors = [(255, 0, 0) if i <= 3 else (0, 0, 255) for i in self.actions]
+                self.passing_colors = [
+                    (0, 0, 255) if abs(p) == 1 else (255, 0, 0)
+                    for p in self.is_passing
+                ]
+                # 低头识别
+                self.peeps = torch.tensor([pitch < peep_angle_gate for pitch in self.angles_pitch])
+                self.peep_texts = ['yes' if p else 'no' for p in self.peeps]
+                self.peep_colors = [(0, 0, 255) if p else (255, 0, 0) for p in self.peeps]
+
+                # 转头识别
+                if self.opt.tracking:
+                    self.probes = [self.turn_head_rate(ids[i], i) > cheating_turn_head_gate for i in indexes]
+                    self.probe_texts = ['yes' if p else 'no' for p in self.probes]
+                    self.probe_colors = [(0, 0, 255) if p else (255, 0, 0) for p in self.probes]
         # 逐个处理
         for i in range(object_num):
             if self.opt.tracking:
@@ -261,6 +282,7 @@ class DataDealer:
                     else:
                         open_mouth = ""
                     print(mouth_distance, open_mouth)
+
             # =====伸手识别=====
         # =====开始表情识别=====
 
@@ -269,28 +291,59 @@ class DataDealer:
         i = self_state['index']
         bbox = result[i]['box']
         bbox = [bbox[0], bbox[0] + bbox[2], bbox[1], bbox[1] + bbox[3]]
+        text_pos = 52
+        text_gap = 20
+        text_scale = 0.5
+        text_width = 1
         if self.opt.analyse_focus:
-            angle = round(self.angles[i], 2)
             focus_rate = round(self_state["focus_rate"], 2)
             text = f'focus:{focus_rate}'
             cv2.putText(img, text,
-                        (int(bbox[0]), int((bbox[2] + 52))), font,
-                        0.6, (0, 0, 255), 2)
-            text = f'angle:{angle}'
-            cv2.putText(img, text,
-                        (int(bbox[0]), int((bbox[2] + 72))), font,
-                        0.6, (0, 0, 255), 2)
+                        (int(bbox[0]), int((bbox[2] + text_pos))), font,
+                        text_scale, (0, 255, 0), text_width)
+            text_pos += text_gap
+            angle_pitch = f'angle_pitch:{round(self.angles_pitch[i], 2)}'
+            cv2.putText(img, angle_pitch,
+                        (int(bbox[0]), int((bbox[2] + text_pos))), font,
+                        text_scale, (0, 255, 0), text_width)
+            text_pos += text_gap
 
         if self.opt.analyse_cheating:
-            passing_tips = f'passing: {self.passing_tips[i]}'
-            cv2.putText(img, passing_tips,
-                        (int(bbox[0]), int((bbox[2] + 52))), font,
-                        0.6, (0, 0, 255), 2)
-            action_text = self.actions_texts[i]
-            action_color = self.actions_colors[i]
-            cv2.putText(img, action_text,
-                        (int(bbox[0]), int((bbox[2] + 72))), font,
-                        0.6, action_color, 2)
+            # action_text = self.actions_texts[i]
+            # action_color = self.actions_colors[i]
+            # cv2.putText(img, action_text,
+            #             (int(bbox[0]), int((bbox[2] + text_pos))), font,
+            #             0.6, action_color, 2)
+            # text_pos += 20
+            passing_text = f'passing: {self.passing_texts[i]}'
+            passing_color = self.passing_colors[i]
+            cv2.putText(img, passing_text,
+                        (int(bbox[0]), int((bbox[2] + text_pos))), font,
+                        text_scale, passing_color, text_width)
+            text_pos += text_gap
+            # angle_pitch = f'angle_pitch:{round(self.angles_pitch[i], 2)}'
+            # cv2.putText(img, angle_pitch,
+            #             (int(bbox[0]), int((bbox[2] + text_pos))), font,
+            #             text_scale, (0, 255, 0), text_width)
+            # text_pos += text_gap
+            peep_text = f'peep: {self.peep_texts[i]}'
+            peep_color = self.peep_colors[i]
+            cv2.putText(img, peep_text,
+                        (int(bbox[0]), int((bbox[2] + text_pos))), font,
+                        text_scale, peep_color, text_width)
+            text_pos += text_gap
+            if self.opt.tracking:
+                # probe_text = f'probe: {self.probe_texts[i]}'
+                # probe_color = self.probe_colors[i]
+                # cv2.putText(img, probe_text,
+                #             (int(bbox[0]), int((bbox[2] + text_pos))), font,
+                #             text_scale, probe_color, text_width)
+                # text_pos += text_gap
+                angle_yaw = f'angle_yaw:{round(self.angles_yaw[i], 2)}'
+                cv2.putText(img, angle_yaw,
+                            (int(bbox[0]), int((bbox[2] + text_pos))), font,
+                            text_scale, (20, 255, 20), text_width)
+                text_pos += text_gap
 
     @staticmethod
     def draw_pose(pose_estimator, img, pose_list):
@@ -446,6 +499,32 @@ class DataDealer:
         else:
             focus_rate = self.reid_states.get(reid, "focus_rate")
         return focus_rate
+
+    def turn_head_rate(self, reid, index):
+        self_state = self.reid_states[reid]
+        angle_yaw = self.angles_yaw[index]
+        if 'right_front' not in self_state:
+            self_state['right_front'] = angle_yaw
+            self_state['angle_yaw'] = angle_yaw
+        old_yaw_angle = self_state['angle_yaw']
+        right_front = self_state['right_front']
+        angle_yaw = self.reid_states.smooth_set(reid, 'angle_yaw', angle_yaw, limit=60)
+        global_turn_head_angle = abs(angle_yaw - right_front)
+        current_turn_head_angle = abs(angle_yaw - old_yaw_angle)
+        reset_condition = global_turn_head_angle < turn_head_tolerance and current_turn_head_angle < turn_head_tolerance
+        if reset_condition:
+            right_front_timer = self.reid_states.timer_reset(reid, 'right_front_timer')
+        else:
+            right_front_timer = self.reid_states.timer_set(reid, 'right_front_timer')
+        if right_front_timer > right_font_reset_interval:
+            self_state['right_front'] = angle_yaw
+        # print(
+        #     f'right_front:{right_front}\n'
+        #     f'global_turn_head:{global_turn_head_angle}\n'
+        #     f'angle_yaw:{angle_yaw}\n'
+        #     f'right_front_timer:{right_front_timer}'
+        # )
+        return global_turn_head_angle
 
     def write_image(self, img, im_name, stream=None):
         if self.opt.vis:

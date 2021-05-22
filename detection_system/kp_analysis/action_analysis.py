@@ -1,19 +1,26 @@
+import numpy as  np
 import torch
+
+default_focus = torch.tensor([1176.03538718, 165.21773522])
 
 
 # ==================
 # 基于关键点的伸手识别部分
 # ==================
-def stretch_out_degree(keypoints, left=True, right=True):
+def stretch_out_degree(keypoints, left=True, right=True, focus=default_focus):
     """
+    :param focus: 透视焦点
     :param keypoints: Halpe 26 keypoints 或 136关键点 [N,keypoints]
     :param left: 是否计算作弊的伸手情况
     :param right: 是否计算右臂的伸手情况
     :return: ([N,left_hand_degree],[N,left_hand_degree]), hand_degree = (arm out?,forearm out?,straight arm?)
     """
+    if focus is None:
+        shoulder_vec = keypoints[:, 6] - keypoints[:, 5]
+    else:
+        shoulder_vec = (keypoints[:, 6] + keypoints[:, 5]) / 2 - focus
     result = []
     if left:
-        shoulder_vec = keypoints[:, 6] - keypoints[:, 5]
         arm_vec = keypoints[:, 5] - keypoints[:, 7]
         forearm_vec = keypoints[:, 7] - keypoints[:, 9]
         _results = torch.hstack([torch.cosine_similarity(shoulder_vec, arm_vec).unsqueeze(1),
@@ -21,7 +28,7 @@ def stretch_out_degree(keypoints, left=True, right=True):
                                  torch.cosine_similarity(arm_vec, forearm_vec).unsqueeze(1)])
         result.append(_results)
     if right:
-        shoulder_vec = keypoints[:, 5] - keypoints[:, 6]
+        shoulder_vec = -shoulder_vec
         arm_vec = keypoints[:, 6] - keypoints[:, 8]
         forearm_vec = keypoints[:, 8] - keypoints[:, 10]
         _results = torch.hstack([torch.cosine_similarity(shoulder_vec, arm_vec).unsqueeze(1),
@@ -40,7 +47,7 @@ def is_stretch_out(degree, threshold=None, dim=1):
     :return:
     """
     if threshold is None:
-        threshold = torch.tensor([0.6, 0.6, 0.5])
+        threshold = torch.tensor([0.8, 0.8, 0.5])
     return torch.all(degree > threshold, dim=dim)
 
 
@@ -71,6 +78,17 @@ def is_raise_hand(keypoints):
     :return: [N,[左手举手?,右手举手?]]
     """
     return keypoints[:, [17], 1] > keypoints[:, [9, 10], 1]
+
+
 # ==================
 # 基于关键点的转头识别部分
 # ==================
+
+
+if __name__ == '__main__':
+    p1, p2, p3, p4 = (74, 182), (271, 179), (386, 359), (757, 268)
+    A = np.array([[p2[1] - p1[1], p1[0] - p2[0]],
+                  [p4[1] - p3[1], p3[0] - p4[0]]])
+    b = np.array([(p1[0] - p2[0]) * p1[1] - (p1[1] - p2[1]) * p1[0],
+                  (p3[0] - p4[0]) * p3[1] - (p3[1] - p4[1]) * p3[0]])
+    print(np.linalg.solve(A, b))

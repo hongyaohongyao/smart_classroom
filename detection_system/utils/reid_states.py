@@ -41,10 +41,14 @@ class ReIDStates:
     def get_global_interval(self):
         return self.global_states['interval']
 
-    def smooth_set(self, reid, field_name, new_value, c=0.5, init_value=0.0):
+    def smooth_set(self, reid, field_name, new_value, c=0.5, limit=-1):
         self_state = self[reid]
-        old_value = self_state.get(field_name, init_value)
-        self_state[field_name] = c * new_value + (1 - c) * old_value
+        old_value = self_state.get(field_name, new_value)
+        if limit >= 0:
+            new_value = max(min(new_value, old_value + limit), old_value - limit)
+            self_state[field_name] = c * new_value + (1 - c) * old_value
+        else:
+            self_state[field_name] = c * new_value + (1 - c) * old_value
         return self_state[field_name]
 
     def timer_set(self, reid, timer_name):
@@ -57,3 +61,4 @@ class ReIDStates:
     def timer_reset(self, reid, timer_name):
         self_state = self[reid]
         self_state[timer_name] = 0
+        return 0
