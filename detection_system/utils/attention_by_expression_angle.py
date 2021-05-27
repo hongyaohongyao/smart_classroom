@@ -1,5 +1,8 @@
 import numpy as np
 
+expression_names = ["nature", "happy", "confused", "amazing"]
+expression_colors = [(0, 0, 255), (255, 255, 0), (255, 0, 255), (0, 255, 255)]
+
 
 class BE2:
     def __init__(self, R1):
@@ -206,14 +209,14 @@ class AttentionScore():
         weight = [0.5, 0.5]
 
         expression_score = self.be2.run(expression_weight)
-        return np.dot(weight, [expression_score, angle_score])
+        return np.dot(weight, [expression_score, angle_score]), expression
 
 
 attention_score = AttentionScore()  # 默认的专注度识别器
 
 
 def attention_degrees(face_keypoints, angles):
-    return [attention_score(fk, ang) for fk, ang in zip(face_keypoints, angles)]
+    return [[*attention_score(fk, ang)] for fk, ang in zip(face_keypoints, angles)]
 
 
 if __name__ == '__main__':

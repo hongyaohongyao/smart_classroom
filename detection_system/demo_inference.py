@@ -98,9 +98,9 @@ parser.add_argument('--scene_mask', dest='scene_mask',
 parser.add_argument('--show_scene_mask', dest='show_scene_mask',
                     help='是否展示场景遮罩', action='store_true', default=False)
 parser.add_argument('--analyse_focus', dest='analyse_focus',
-                    help='是否分析专注度', action='store_true', default=False)
+                    help='是否分析专注度', action='store_true', default=True)
 parser.add_argument('--analyse_cheating', dest='analyse_cheating',
-                    help='是否在作弊', action='store_true', default=True)
+                    help='是否在作弊', action='store_true', default=False)
 parser.add_argument('--show_keypoints', dest='show_keypoints',
                     help='是否展示关键点', action='store_true', default=False)
 parser.add_argument('--save_cheaters', dest='save_cheaters',

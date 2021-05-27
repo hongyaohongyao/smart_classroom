@@ -12,7 +12,7 @@ from alphapose.utils.pPose_nms import pose_nms, write_json
 from alphapose.utils.transforms import get_func_heatmap_to_coord
 from kp_analysis import action_analysis
 from pose_estimation.pose_estimator import PoseEstimator
-from utils.attention_by_expression_angle import attention_degrees
+from utils.attention_by_expression_angle import attention_degrees, expression_names, expression_colors
 from utils.reid_states import ReIDStates
 from utils.scene_masker import SceneMasker
 
@@ -223,17 +223,16 @@ class DataDealer:
         # print(self.scene_mask.is_in_seat(boxes))
         indexes = torch.arange(0, len(preds_img))  # 辅助索引
         if self.head_pose:  # 头部状态估计
-            self.emoji_available_list = []  # 判断是否要识别表情
             # 取出脸部关键点
             face_keypoints = preds_img[:, 26:94]
             face_keypoints_scores = preds_scores[:, 26:94]
             # =====脸部露出判定======
-            naked_faces = torch.sum(face_keypoints_scores[:, 27:48, 0] > 0.01,
-                                    dim=1) / 21  # 这部分暂时不包括嘴部数据
-            naked_mouths = torch.sum(face_keypoints_scores[:, 48:68, 0] > 0.1,
-                                     dim=1) / 20  # 这部分是嘴部的裸露程度
+            self.naked_faces = torch.sum(face_keypoints_scores[:, 27:48, 0] > 0.005,
+                                         dim=1) / 21  # 这部分暂时不包括嘴部数据
+            self.naked_mouths = torch.sum(face_keypoints_scores[:, 48:68, 0] > 0.05,
+                                          dim=1) / 20  # 这部分是嘴部的裸露程度
             # 判断是否能够识别表情
-            self.emoji_available_list.extend(indexes[(naked_faces > 0.5) & (naked_mouths > 0.5)])
+            self.emotion_available_list = (self.naked_faces > 0.5) & (self.naked_mouths > 0.5)
             # 头部姿态估计 也包括其他姿态估计
             pose_estimator = self.pose_estimator
             self.pose_list = [{'head': self.estimate_head_pose(pose_estimator, face_keypoints[i]),
@@ -241,12 +240,13 @@ class DataDealer:
                                'neck': self.estimate_neck_pose(pose_estimator, preds_img[i, [17, 18, 5, 6]]),
                                'index': i}
                               for i in range(object_num)]
+            # self.angles_yaw0 = [pose['head'][0][1][0] * 57.3 for pose in self.pose_list]
             if self.opt.analyse_focus or self.opt.analyse_cheating:
                 self.angles_pitch = [pose['head'][0][0][0] * 57.3 for pose in self.pose_list]
                 # self.angles_yaw = [pose['head'][0][1][0] * 57.3 for pose in self.pose_list]
                 self.angles_yaw = [action_analysis.turn_head_angle(*pose['head']) * 57.3 for pose in self.pose_list]
             if self.opt.analyse_focus:  # 是否分析专注度
-                self.attention_scores = attention_degrees(face_keypoints, self.angles_roll)
+                self.attention_results = attention_degrees(face_keypoints, self.angles_pitch)
             if self.opt.analyse_cheating:
                 # self.actions = action_classifier.action_classify(preds_img)
                 # self.actions_texts = [action_classifier.action_type[i] for i in self.actions]
@@ -282,9 +282,9 @@ class DataDealer:
             if self.head_pose:
                 # ====指标====脸部遮挡检测=======
                 if self_state is not None and self.opt.analyse_focus:
-                    self.focus_rates(ids[i], self.attention_scores[i], naked_faces[i])
+                    self.focus_rates(ids[i], self.attention_results[i][0], self.naked_faces[i])
                 # ==口型识别== 打哈欠和说话
-                if naked_mouths[i] > 0.5 and False:
+                if self.naked_mouths[i] > 0.5 and False:
                     scaled_mouth_keypoints, _ = self.get_scaled_mouth_keypoints(face_keypoints)
                     mouth_distance = self.mouth_open_degree(scaled_mouth_keypoints)
                     if mouth_distance[1] > 0.3:
@@ -314,11 +314,19 @@ class DataDealer:
                         (int(bbox[0]), int((bbox[2] + text_pos))), font,
                         text_scale, (0, 255, 0), text_width)
             text_pos += text_gap
-            angle_pitch = f'angle_pitch:{round(self.angles_pitch[i], 2)}'
-            cv2.putText(img, angle_pitch,
+            emotion_available = self.emotion_available_list[i]
+            emotion = expression_names[self.attention_results[i][1]] if emotion_available else 'no'
+            expression_color = expression_colors[self.attention_results[i][1]]
+            emotion = f'emotion:{emotion}'
+            cv2.putText(img, emotion,
                         (int(bbox[0]), int((bbox[2] + text_pos))), font,
-                        text_scale, (0, 255, 0), text_width)
+                        text_scale, expression_color if emotion_available else (255, 0, 0), text_width)
             text_pos += text_gap
+            # angle_pitch = f'angle_pitch:{round(self.angles_pitch[i], 2)}'
+            # cv2.putText(img, angle_pitch,
+            #             (int(bbox[0]), int((bbox[2] + text_pos))), font,
+            #             text_scale, (0, 255, 0), text_width)
+            # text_pos += text_gap
 
         if self.opt.analyse_cheating:
             # action_text = self.actions_texts[i]
@@ -346,16 +354,16 @@ class DataDealer:
                             (int(bbox[0]), int((bbox[2] + text_pos))), font,
                             text_scale, probe_color, text_width)
                 text_pos += text_gap
-                # angle_yaw = f'angle_yaw:{round(self.angles_yaw[i], 2)}'
-                # cv2.putText(img, angle_yaw,
-                #             (int(bbox[0]), int((bbox[2] + text_pos))), font,
-                #             text_scale, (20, 255, 20), text_width)
-                # text_pos += text_gap
                 # angle_pitch = f'angle_pitch:{round(self.angles_pitch[i], 2)}'
                 # cv2.putText(img, angle_pitch,
                 #             (int(bbox[0]), int((bbox[2] + text_pos))), font,
                 #             text_scale, (0, 255, 0), text_width)
                 # text_pos += text_gap
+        # angle_yaw = f'angle_yaw:{round(self.angles_yaw0[i], 2)}'
+        # cv2.putText(img, angle_yaw,
+        #             (int(bbox[0]), int((bbox[2] + text_pos))), font,
+        #             1, (20, 20, 255), 2)
+        # text_pos += text_gap
 
     def save_cheaters(self, img, boxes, ids, cheating_indexs):
         save_time_str = time.strftime('%Y%m%d%H%M%S')

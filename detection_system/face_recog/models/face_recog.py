@@ -150,7 +150,7 @@ def skin_detect(img):
 
 def skin_detect_one_zero_matrix(img):
     skinCrCbHist = np.zeros((256, 256), dtype=np.uint8)
-    # 利用opencv自带的椭圆生成函数先生成一个肤色椭圆模型
+    # 利用opencv的椭圆生成函数先生成一个肤色椭圆模型
     cv2.ellipse(skinCrCbHist, (113, 156), (23, 15), 43, 0, 360, (255, 255, 255), -1)
     output_mask = np.zeros(img.shape[:2], dtype=np.uint8)
     ycrcb_image = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)  # 首先转换成到YCrCb空间

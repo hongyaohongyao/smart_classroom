@@ -4,7 +4,6 @@ import time
 import cv2
 import numpy as np
 import torch
-
 from layers.functions.prior_box import PriorBox
 from models.faceboxes import FaceBoxes
 from utils.box_utils import decode

@@ -9,7 +9,7 @@ default_focus = torch.tensor([1176.03538718, 165.21773522])
 # ==================
 # 基于关键点的伸手识别部分
 # ==================
-def stretch_out_degree(keypoints, left=True, right=True, focus=default_focus):
+def stretch_out_degree(keypoints, left=True, right=True, focus=None):
     """
     :param focus: 透视焦点
     :param keypoints: Halpe 26 keypoints 或 136关键点 [N,keypoints]
