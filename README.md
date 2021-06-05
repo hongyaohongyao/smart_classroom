@@ -84,6 +84,24 @@ python setup.py build develop
 python demo_inference.py --vis --webcam 0
 ```
 
+# 效果
+
+## 课堂专注度分析
+
+课堂专注度+表情识别
+
+![正面专注度](.img/README/正面专注度.png)
+
+## 作弊检测
+
+转头(probe)+低头(peep)+传递物品(passing)
+
+![正面作弊动作](.img/README/正面作弊动作.png)
+
+侧面的传递物品识别
+
+![侧面作弊动作](.img/README/侧面作弊动作.png)
+
 # 参考项目
 
 - [AlphaPose](https://github.com/MVIG-SJTU/AlphaPose) 
