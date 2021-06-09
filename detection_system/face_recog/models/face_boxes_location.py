@@ -4,10 +4,17 @@ import time
 import cv2
 import numpy as np
 import torch
-from layers.functions.prior_box import PriorBox
-from models.faceboxes import FaceBoxes
-from utils.box_utils import decode
-from utils.nms.py_cpu_nms import py_cpu_nms as nms
+
+try:
+    from layers.functions.prior_box import PriorBox
+    from models.faceboxes import FaceBoxes
+    from utils.box_utils import decode
+    from utils.nms.py_cpu_nms import py_cpu_nms as nms
+except ImportError:
+    from face_recog.layers.functions.prior_box import PriorBox
+    from face_recog.models.faceboxes import FaceBoxes
+    from face_recog.utils.box_utils import decode
+    from face_recog.utils.nms.py_cpu_nms import py_cpu_nms as nms
 
 cfg = {
     'name': 'FaceBoxes',
@@ -24,9 +31,9 @@ cfg = {
 
 
 class FaceBoxesLocation:
-    def __init__(self, **opt):
+    def __init__(self, weights='weights/FaceBoxes.pth', **opt):
         net = FaceBoxes(phase='test', size=None, num_classes=2)  # initialize detector
-        net = load_model(net, opt.get("weights", 'weights/FaceBoxes.pth'), True)
+        net = load_model(net, opt.get("weights", weights), True)
         net.eval()
         self.net = net
         self.top_k = opt.get('top_k', 5000)

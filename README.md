@@ -104,9 +104,10 @@ python demo_inference.py --vis --webcam 0
 
 # 参考项目
 
-- [AlphaPose](https://github.com/MVIG-SJTU/AlphaPose) 
-- [head-pose-estimation](https://github.com/yinguobing/head-pose-estimation) 
-- [faceboxes](https://github.com/zisianw/FaceBoxes.PyTorch) 
+- [人体姿态估计 AlphaPose](https://github.com/MVIG-SJTU/AlphaPose) 
+- [头部姿态估计 head-pose-estimation](https://github.com/yinguobing/head-pose-estimation) 
+- [人脸检测 faceboxes](https://github.com/zisianw/FaceBoxes.PyTorch) 
+- [静默人脸识别 Silent-Face-Anti-Spoofing](https://github.com/minivision-ai/Silent-Face-Anti-Spoofing) 
 
 # 相关信息
 

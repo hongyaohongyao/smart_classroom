@@ -2,8 +2,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from data import cfg
-from utils.box_utils import match, log_sum_exp
+try:
+    from data import cfg
+    from utils.box_utils import match, log_sum_exp
+except ImportError:
+    from face_recog.data import cfg
+    from face_recog.utils.box_utils import match, log_sum_exp
 
 GPU = cfg['gpu_train']
 
