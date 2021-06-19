@@ -2,6 +2,22 @@
 
 课堂专注度及考试作弊系统、课堂动态点名，情绪识别、表情识别和人脸识别结合
 
+## 课堂专注度分析
+
+课堂专注度+表情识别
+
+![正面专注度](.img/README/正面专注度.png)
+
+## 作弊检测
+
+转头(probe)+低头(peep)+传递物品(passing)
+
+![正面作弊动作](.img/README/正面作弊动作.png)
+
+侧面的传递物品识别
+
+![侧面作弊动作](.img/README/侧面作弊动作.png)
+
 ## 下载权重
 
 ### 1. [Halpe dataset](https://github.com/Fang-Haoshu/Halpe-FullBody) (136 keypoints)
@@ -25,18 +41,6 @@ Then simply run alphapose with additional flag `--pose_track`
 You can try different person reid model by modifing `cfg.arch` and `cfg.loadmodel` in `./trackers/tracker_cfg.py`.
 
 If you want to train your own reid model, please refer to this [project](https://github.com/KaiyangZhou/deep-person-reid)
-
-#### Demo
-
-```
-./scripts/inference.sh ${CONFIG} ${CHECKPOINT} ${VIDEO_NAME}  ${OUTPUT_DIR}, --pose_track
-```
-
-#### Todo
-
-- [] Evaluation Tools for PoseTrack
-- [] More Models
-- [] Training code for [PoseTrack Dataset](https://posetrack.net/)
 
 ### 3. Yolo Detector
 
@@ -83,24 +87,6 @@ python setup.py build develop
 ```
 python demo_inference.py --vis --webcam 0
 ```
-
-# 效果
-
-## 课堂专注度分析
-
-课堂专注度+表情识别
-
-![正面专注度](.img/README/正面专注度.png)
-
-## 作弊检测
-
-转头(probe)+低头(peep)+传递物品(passing)
-
-![正面作弊动作](.img/README/正面作弊动作.png)
-
-侧面的传递物品识别
-
-![侧面作弊动作](.img/README/侧面作弊动作.png)
 
 # 参考项目
 
