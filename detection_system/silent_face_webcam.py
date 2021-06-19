@@ -22,7 +22,16 @@ warnings.filterwarnings('ignore')
 
 SAMPLE_IMAGE_PATH = "./images/sample/"
 
-wanted_model_index = [0]
+wanted_model_index = [1]
+
+
+def generate_FT_2(image):
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    f = np.fft.fft2(image)
+    fshift = np.fft.fftshift(f)
+    fimg = 20 * np.log(np.abs(fshift) + 1)
+
+    return fimg
 
 
 def test_webcam(model_dir, device_id):
@@ -34,11 +43,11 @@ def test_webcam(model_dir, device_id):
             continue
         models.append(AntiSpoofPredictor(device_id, os.path.join(model_dir, model_name)))
         params.append(parse_model_name(model_name))
-        print(f"Load model {model_name}")
     image_cropper = CropImage()
     cap = cv2.VideoCapture(0)
     if cap.isOpened():
         ret, frame = cap.read()
+    i = 0
     while ret:
         image_bboxes = fbl.face_location(frame)
         image_bboxes[:, 2:] = image_bboxes[:, 2:] - image_bboxes[:, :2]
@@ -82,6 +91,11 @@ def test_webcam(model_dir, device_id):
                 result_text,
                 (image_bbox[0], image_bbox[1] - 5),
                 cv2.FONT_HERSHEY_COMPLEX, 0.5 * frame.shape[0] / 500, color)
+
+            cv2.imwrite(f"./face_imgs/{i}_face_{label}.jpg", img)
+            cv2.imwrite(f"./face_imgs/{i}_ft_{label}.jpg", generate_FT_2(img))
+            i = i + 1;
+
         cv2.imshow("silent-face", frame)
         # 下一帧
         ret, frame = cap.read()

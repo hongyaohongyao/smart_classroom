@@ -12,6 +12,7 @@ import torch.multiprocessing as mp
 from alphapose.utils.presets import SimpleTransform
 from alphapose.models import builder
 
+
 class DetectionLoader():
     def __init__(self, input_source, detector, cfg, opt, mode='image', batchSize=1, queueSize=128):
         self.cfg = cfg
@@ -139,7 +140,8 @@ class DetectionLoader():
                 # add one dimension at the front for batch if image shape (3,h,w)
                 if img_k.dim() == 3:
                     img_k = img_k.unsqueeze(0)
-                orig_img_k = cv2.cvtColor(cv2.imread(im_name_k), cv2.COLOR_BGR2RGB) # scipy.misc.imread(im_name_k, mode='RGB') is depreciated
+                orig_img_k = cv2.cvtColor(cv2.imread(im_name_k),
+                                          cv2.COLOR_BGR2RGB)  # scipy.misc.imread(im_name_k, mode='RGB') is depreciated
                 im_dim_list_k = orig_img_k.shape[1], orig_img_k.shape[0]
 
                 imgs.append(img_k)
@@ -213,7 +215,6 @@ class DetectionLoader():
             if imgs is None or self.stopped:
                 self.wait_and_put(self.det_queue, (None, None, None, None, None, None, None))
                 return
-
             with torch.no_grad():
                 # pad useless images to fill a batch, else there will be a bug
                 for pad_i in range(self.batchSize - len(imgs)):
@@ -243,7 +244,9 @@ class DetectionLoader():
                 inps = torch.zeros(boxes_k.size(0), 3, *self._input_size)
                 cropped_boxes = torch.zeros(boxes_k.size(0), 4)
 
-                self.wait_and_put(self.det_queue, (orig_imgs[k], im_names[k], boxes_k, scores[dets[:, 0] == k], ids[dets[:, 0] == k], inps, cropped_boxes))
+                self.wait_and_put(self.det_queue, (
+                    orig_imgs[k], im_names[k], boxes_k, scores[dets[:, 0] == k], ids[dets[:, 0] == k], inps,
+                    cropped_boxes))
 
     def image_postprocess(self):
         for i in range(self.datalen):

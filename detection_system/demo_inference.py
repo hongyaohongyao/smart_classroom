@@ -64,9 +64,9 @@ parser.add_argument('--format', type=str,
                     help='save in the format of cmu or coco or openpose, option: coco/cmu/open')
 parser.add_argument('--min_box_area', type=int, default=0,
                     help='min box area to filter out')
-parser.add_argument('--detbatch', type=int, default=5,
+parser.add_argument('--detbatch', type=int, default=1,
                     help='detection batch size PER GPU')
-parser.add_argument('--posebatch', type=int, default=80,
+parser.add_argument('--posebatch', type=int, default=40,
                     help='pose estimation maximum batch size PER GPU')
 parser.add_argument('--eval', dest='eval', default=False, action='store_true',
                     help='save the result json as coco format, using image index(int) instead of image name(str)')
@@ -98,13 +98,15 @@ parser.add_argument('--scene_mask', dest='scene_mask',
 parser.add_argument('--show_scene_mask', dest='show_scene_mask',
                     help='是否展示场景遮罩', action='store_true', default=False)
 parser.add_argument('--analyse_focus', dest='analyse_focus',
-                    help='是否分析专注度', action='store_true', default=True)
+                    help='是否分析专注度', action='store_true', default=False)
 parser.add_argument('--analyse_cheating', dest='analyse_cheating',
                     help='是否在作弊', action='store_true', default=False)
 parser.add_argument('--show_keypoints', dest='show_keypoints',
-                    help='是否展示关键点', action='store_true', default=False)
+                    help='是否展示关键点', action='store_true', default=True)
 parser.add_argument('--save_cheaters', dest='save_cheaters',
                     help='是否保存作弊人员图像', action='store_true', default=False)
+parser.add_argument('--classroom_action', dest='classroom_action',
+                    help='课堂动作识别', action='store_true', default=True)
 
 args = parser.parse_args()
 cfg = update_config(args.cfg)

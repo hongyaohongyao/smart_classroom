@@ -11,6 +11,8 @@ import torch.multiprocessing as mp
 from alphapose.utils.pPose_nms import pose_nms, write_json
 from alphapose.utils.transforms import get_func_heatmap_to_coord
 from kp_analysis import action_analysis
+from kp_analysis import action_classifier_v2 as action_classifier
+from kp_analysis.action_analysis import turn_head_angle_yaw
 from pose_estimation.pose_estimator import PoseEstimator
 from utils.attention_by_expression_angle import attention_degrees, expression_names, expression_colors
 from utils.reid_states import ReIDStates
@@ -153,8 +155,9 @@ class DataDealer:
                 if not self.opt.pose_track:
                     boxes, scores, ids, preds_img, preds_scores, pick_ids = \
                         pose_nms(boxes, scores, ids, preds_img, preds_scores, self.opt.min_box_area)
-                    if len(preds_img) != 0:
-                        preds_img = torch.stack(preds_img)
+                    preds_img = torch.stack(preds_img)
+                else:
+                    preds_scores = torch.tensor(preds_scores)
                 # print(boxes[0], cropped_boxes[0],hm_data[0].shape)
                 # =========================目标检测对象处理===========================
                 if len(preds_img) != 0:
@@ -195,9 +198,9 @@ class DataDealer:
                     else:
                         from alphapose.utils.vis import vis_frame, DEFAULT_FONT
                     # 开始绘图==============
-                    pose_list = self.pose_list
                     img = vis_frame(orig_img, result, self.opt)
-                    if self.head_pose and len(pose_list) != 0:
+                    if self.head_pose and hasattr(self, 'pose_list') and len(self.pose_list) != 0:
+                        pose_list = self.pose_list
                         self.draw_pose(self.pose_estimator, img, pose_list)
                         if self.opt.tracking:
                             # 行人重识别状态
@@ -222,6 +225,11 @@ class DataDealer:
         # 场景位置识别 场景遮罩
         # print(self.scene_mask.is_in_seat(boxes))
         indexes = torch.arange(0, len(preds_img))  # 辅助索引
+        if self.opt.classroom_action:
+            self.actions = action_classifier.action_classify(preds_img)
+            self.actions_texts = [action_classifier.action_type[i] for i in self.actions]
+            # self.actions_colors = [(255, 0, 0) if i <= 3 else (0, 0, 255) for i in self.actions]
+            self.actions_colors = [(0, 0, 255) for i in self.actions]
         if self.head_pose:  # 头部状态估计
             # 取出脸部关键点
             face_keypoints = preds_img[:, 26:94]
@@ -240,7 +248,10 @@ class DataDealer:
                                'neck': self.estimate_neck_pose(pose_estimator, preds_img[i, [17, 18, 5, 6]]),
                                'index': i}
                               for i in range(object_num)]
-            # self.angles_yaw0 = [pose['head'][0][1][0] * 57.3 for pose in self.pose_list]
+            self.angles_yaw0 = [turn_head_angle_yaw(pose_estimator.get_euler(*pose['head'])[0][0], pose['head'][1])
+                                for pose in self.pose_list]
+            self.angles_pitch0 = [turn_head_angle_yaw(pose_estimator.get_euler(*pose['head'])[1][0], pose['head'][1])
+                                  for pose in self.pose_list]
             if self.opt.analyse_focus or self.opt.analyse_cheating:
                 self.angles_pitch = [pose['head'][0][0][0] * 57.3 for pose in self.pose_list]
                 # self.angles_yaw = [pose['head'][0][1][0] * 57.3 for pose in self.pose_list]
@@ -327,14 +338,14 @@ class DataDealer:
             #             (int(bbox[0]), int((bbox[2] + text_pos))), font,
             #             text_scale, (0, 255, 0), text_width)
             # text_pos += text_gap
-
+        if self.opt.classroom_action:
+            action_text = self.actions_texts[i]
+            action_color = self.actions_colors[i]
+            cv2.putText(img, action_text,
+                        (int(bbox[0]), int((bbox[2] + text_pos))), font,
+                        0.6, action_color, 2)
+            text_pos += 20
         if self.opt.analyse_cheating:
-            # action_text = self.actions_texts[i]
-            # action_color = self.actions_colors[i]
-            # cv2.putText(img, action_text,
-            #             (int(bbox[0]), int((bbox[2] + text_pos))), font,
-            #             0.6, action_color, 2)
-            # text_pos += 20
             passing_text = f'passing: {self.passing_texts[i]}'
             passing_color = self.passing_colors[i]
             cv2.putText(img, passing_text,
@@ -359,11 +370,16 @@ class DataDealer:
                 #             (int(bbox[0]), int((bbox[2] + text_pos))), font,
                 #             text_scale, (0, 255, 0), text_width)
                 # text_pos += text_gap
-        # angle_yaw = f'angle_yaw:{round(self.angles_yaw0[i], 2)}'
-        # cv2.putText(img, angle_yaw,
-        #             (int(bbox[0]), int((bbox[2] + text_pos))), font,
-        #             1, (20, 20, 255), 2)
-        # text_pos += text_gap
+        angle_yaw = f'angle_yaw:{round(self.angles_yaw0[i], 2)}'
+        cv2.putText(img, angle_yaw,
+                    (int(bbox[0]), int((bbox[2] + text_pos))), font,
+                    1, (20, 20, 255), 2)
+        text_pos += text_gap
+        angle_yaw = f'angle_pitch:{round(self.angles_pitch0[i], 2)}'
+        cv2.putText(img, angle_yaw,
+                    (int(bbox[0]), int((bbox[2] + text_pos))), font,
+                    1, (20, 20, 255), 2)
+        text_pos += text_gap
 
     def save_cheaters(self, img, boxes, ids, cheating_indexs):
         save_time_str = time.strftime('%Y%m%d%H%M%S')

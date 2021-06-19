@@ -1,5 +1,5 @@
 examples/res/*
-
+face_imgs
 !examples/scene_mask.png
 
 # Byte-compiled / optimized / DLL files

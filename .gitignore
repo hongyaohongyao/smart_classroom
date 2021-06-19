@@ -4,4 +4,6 @@
 *.weights
 ignore_projects/*
 *.mp4
+*.MP4
 detection_system/examples/res/alphapose-results.json
+*.onnx

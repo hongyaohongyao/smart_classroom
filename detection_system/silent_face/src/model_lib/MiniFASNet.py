@@ -49,7 +49,7 @@ class Linear_block(Module):
 
 
 class Depth_Wise(Module):
-     def __init__(self, c1, c2, c3, residual=False, kernel=(3, 3), stride=(2, 2), padding=(1, 1), groups=1):
+    def __init__(self, c1, c2, c3, residual=False, kernel=(3, 3), stride=(2, 2), padding=(1, 1), groups=1):
         super(Depth_Wise, self).__init__()
         c1_in, c1_out = c1
         c2_in, c2_out = c2
@@ -59,7 +59,7 @@ class Depth_Wise(Module):
         self.project = Linear_block(c3_in, c3_out, kernel=(1, 1), padding=(0, 0), stride=(1, 1))
         self.residual = residual
 
-     def forward(self, x):
+    def forward(self, x):
         if self.residual:
             short_cut = x
         x = self.conv(x)
@@ -121,10 +121,11 @@ class ResidualSE(Module):
             c1_tuple = c1[i]
             c2_tuple = c2[i]
             c3_tuple = c3[i]
-            if i == num_block-1:
+            if i == num_block - 1:
                 modules.append(
-                    Depth_Wise_SE(c1_tuple, c2_tuple, c3_tuple, residual=True, kernel=kernel, padding=padding, stride=stride,
-                               groups=groups, se_reduct=se_reduct))
+                    Depth_Wise_SE(c1_tuple, c2_tuple, c3_tuple, residual=True, kernel=kernel, padding=padding,
+                                  stride=stride,
+                                  groups=groups, se_reduct=se_reduct))
             else:
                 modules.append(Depth_Wise(c1_tuple, c2_tuple, c3_tuple, residual=True, kernel=kernel, padding=padding,
                                           stride=stride, groups=groups))
@@ -208,7 +209,8 @@ class MiniFASNet(Module):
 
         self.conv_5 = Residual(c1, c2, c3, num_block=2, groups=keep[40], kernel=(3, 3), stride=(1, 1), padding=(1, 1))
         self.conv_6_sep = Conv_block(keep[46], keep[47], kernel=(1, 1), stride=(1, 1), padding=(0, 0))
-        self.conv_6_dw = Linear_block(keep[47], keep[48], groups=keep[48], kernel=conv6_kernel, stride=(1, 1), padding=(0, 0))
+        self.conv_6_dw = Linear_block(keep[47], keep[48], groups=keep[48], kernel=conv6_kernel, stride=(1, 1),
+                                      padding=(0, 0))
         self.conv_6_flatten = Flatten()
         self.linear = Linear(512, embedding_size, bias=False)
         self.bn = BatchNorm1d(embedding_size)
@@ -236,9 +238,9 @@ class MiniFASNet(Module):
 
 
 class MiniFASNetSE(MiniFASNet):
-    def __init__(self, keep, embedding_size, conv6_kernel=(7, 7),drop_p=0.75, num_classes=4, img_channel=3):
+    def __init__(self, keep, embedding_size, conv6_kernel=(7, 7), drop_p=0.75, num_classes=4, img_channel=3):
         super(MiniFASNetSE, self).__init__(keep=keep, embedding_size=embedding_size, conv6_kernel=conv6_kernel,
-                                               drop_p=drop_p, num_classes=num_classes, img_channel=img_channel)
+                                           drop_p=drop_p, num_classes=num_classes, img_channel=img_channel)
 
         c1 = [(keep[4], keep[5]), (keep[7], keep[8]), (keep[10], keep[11]), (keep[13], keep[14])]
         c2 = [(keep[5], keep[6]), (keep[8], keep[9]), (keep[11], keep[12]), (keep[14], keep[15])]
@@ -261,7 +263,6 @@ class MiniFASNetSE(MiniFASNet):
         self.conv_5 = ResidualSE(c1, c2, c3, num_block=2, groups=keep[40], kernel=(3, 3), stride=(1, 1), padding=(1, 1))
 
 
-
 keep_dict = {'1.8M': [32, 32, 103, 103, 64, 13, 13, 64, 26, 26,
                       64, 13, 13, 64, 52, 52, 64, 231, 231, 128,
                       154, 154, 128, 52, 52, 128, 26, 26, 128, 52,
@@ -277,20 +278,22 @@ keep_dict = {'1.8M': [32, 32, 103, 103, 64, 13, 13, 64, 26, 26,
 
 # (80x80) flops: 0.044, params: 0.41
 def MiniFASNetV1(embedding_size=128, conv6_kernel=(7, 7),
-                     drop_p=0.2, num_classes=3, img_channel=3):
+                 drop_p=0.2, num_classes=3, img_channel=3):
     return MiniFASNet(keep_dict['1.8M'], embedding_size, conv6_kernel, drop_p, num_classes, img_channel)
 
 
 # (80x80) flops: 0.044, params: 0.43
 def MiniFASNetV2(embedding_size=128, conv6_kernel=(7, 7),
-                     drop_p=0.2, num_classes=3, img_channel=3):
+                 drop_p=0.2, num_classes=3, img_channel=3):
     return MiniFASNet(keep_dict['1.8M_'], embedding_size, conv6_kernel, drop_p, num_classes, img_channel)
+
 
 def MiniFASNetV1SE(embedding_size=128, conv6_kernel=(7, 7),
                    drop_p=0.75, num_classes=3, img_channel=3):
-    return MiniFASNetSE(keep_dict['1.8M'], embedding_size, conv6_kernel,drop_p, num_classes, img_channel)
+    return MiniFASNetSE(keep_dict['1.8M'], embedding_size, conv6_kernel, drop_p, num_classes, img_channel)
+
 
 # (80x80) flops: 0.044, params: 0.43
 def MiniFASNetV2SE(embedding_size=128, conv6_kernel=(7, 7),
                    drop_p=0.75, num_classes=4, img_channel=3):
-    return MiniFASNetSE(keep_dict['1.8M_'], embedding_size, conv6_kernel,drop_p, num_classes, img_channel)
+    return MiniFASNetSE(keep_dict['1.8M_'], embedding_size, conv6_kernel, drop_p, num_classes, img_channel)

@@ -293,3 +293,20 @@ class PoseEstimator:
         """Get marks ready for pose estimation from 68 marks"""
         pose_marks = [marks[30], marks[8], marks[36], marks[45], marks[48], marks[54]]
         return pose_marks
+
+    @staticmethod
+    def get_euler(rotation_vector, translation_vector):
+        """
+        此函数用于从旋转向量计算欧拉角
+        :param translation_vector: 输入为偏移向量
+        :param rotation_vector: 输入为旋转向量
+        :return: 返回欧拉角在三个轴上的值
+        """
+        rvec_matrix = cv2.Rodrigues(rotation_vector)[0]
+        proj_matrix = np.hstack((rvec_matrix, translation_vector))
+        eulerAngles = cv2.decomposeProjectionMatrix(proj_matrix)[6]
+        yaw = eulerAngles[1]
+        pitch = eulerAngles[0]
+        roll = eulerAngles[2]
+        rot_params = np.array([yaw, pitch, roll])
+        return rot_params

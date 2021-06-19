@@ -88,8 +88,8 @@ def is_raise_hand(keypoints):
 
 # f1 = np.array([[0, 1]])
 
-# depth_correction_factor = 0.28550474951641663
-depth_correction_factor = 0.35
+depth_correction_factor = 0.28550474951641663
+# depth_correction_factor = 0.3
 
 
 def turn_head_angle(rvec, tvec):
@@ -107,6 +107,23 @@ def turn_head_angle(rvec, tvec):
         return rvec[1][0] + right_front_angle
     else:
         return rvec[1][0] - right_front_angle
+
+
+def turn_head_angle_yaw(yaw, tvec):
+    # print(head_pose[0][0], head_pose[0][1], head_pose[0][2])
+    # f2 = torch.tensor([[head_pose[1][0][0], ]])
+    # print(torch.arccos(torch.cosine_similarity(f1, f2)))
+    # print(head_pose[1])
+    x = tvec[0][0]
+    depth = tvec[2][0] * depth_correction_factor
+    if depth < 0:
+        depth, x = -depth, -x
+    right_front_angle = math.acos(depth / math.sqrt((x * x + depth * depth))) * 57.3
+    print(x, depth, right_front_angle, yaw)
+    if x < 0:
+        return yaw - right_front_angle
+    else:
+        return yaw + right_front_angle
 
 
 if __name__ == '__main__':
