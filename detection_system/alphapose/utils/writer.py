@@ -248,10 +248,10 @@ class DataDealer:
                                'neck': self.estimate_neck_pose(pose_estimator, preds_img[i, [17, 18, 5, 6]]),
                                'index': i}
                               for i in range(object_num)]
-            self.angles_yaw0 = [turn_head_angle_yaw(pose_estimator.get_euler(*pose['head'])[0][0], pose['head'][1])
-                                for pose in self.pose_list]
-            self.angles_pitch0 = [turn_head_angle_yaw(pose_estimator.get_euler(*pose['head'])[1][0], pose['head'][1])
-                                  for pose in self.pose_list]
+            # self.angles_yaw0 = [turn_head_angle_yaw(pose_estimator.get_euler(*pose['head'])[0][0], pose['head'][1])
+            #                     for pose in self.pose_list]
+            # self.angles_pitch0 = [turn_head_angle_yaw(pose_estimator.get_euler(*pose['head'])[1][0], pose['head'][1])
+            #                       for pose in self.pose_list]
             if self.opt.analyse_focus or self.opt.analyse_cheating:
                 self.angles_pitch = [pose['head'][0][0][0] * 57.3 for pose in self.pose_list]
                 # self.angles_yaw = [pose['head'][0][1][0] * 57.3 for pose in self.pose_list]
@@ -370,16 +370,16 @@ class DataDealer:
                 #             (int(bbox[0]), int((bbox[2] + text_pos))), font,
                 #             text_scale, (0, 255, 0), text_width)
                 # text_pos += text_gap
-        angle_yaw = f'angle_yaw:{round(self.angles_yaw0[i], 2)}'
-        cv2.putText(img, angle_yaw,
-                    (int(bbox[0]), int((bbox[2] + text_pos))), font,
-                    1, (20, 20, 255), 2)
-        text_pos += text_gap
-        angle_yaw = f'angle_pitch:{round(self.angles_pitch0[i], 2)}'
-        cv2.putText(img, angle_yaw,
-                    (int(bbox[0]), int((bbox[2] + text_pos))), font,
-                    1, (20, 20, 255), 2)
-        text_pos += text_gap
+        # angle_yaw = f'angle_yaw:{round(self.angles_yaw0[i], 2)}'
+        # cv2.putText(img, angle_yaw,
+        #             (int(bbox[0]), int((bbox[2] + text_pos))), font,
+        #             1, (20, 20, 255), 2)
+        # text_pos += text_gap
+        # angle_yaw = f'angle_pitch:{round(self.angles_pitch0[i], 2)}'
+        # cv2.putText(img, angle_yaw,
+        #             (int(bbox[0]), int((bbox[2] + text_pos))), font,
+        #             1, (20, 20, 255), 2)
+        # text_pos += text_gap
 
     def save_cheaters(self, img, boxes, ids, cheating_indexs):
         save_time_str = time.strftime('%Y%m%d%H%M%S')
