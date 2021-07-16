@@ -103,8 +103,8 @@ if __name__ == '__main__':
     cum_value = 0
     while ret:
         # 摄像头反转
-        frame = cv2.flip(frame, 1)
         orig_frame = frame
+        frame = cv2.flip(frame, 1)
         # frame = face_recog.face_enhance(frame)
         # 人脸检测
         face_locations = fbl.face_location(frame).astype(int)
@@ -148,7 +148,7 @@ if __name__ == '__main__':
                     else:
                         face_distance = face_recog.face_distance(face_encoding[np.newaxis], new_face_encoding)[0]
                         if face_distance < save_face_gate:
-                            x1, y1, x2, y2 in face_locations[0]
+                            x1, y1, x2, y2 = face_locations[0]
                             add_new_face(face_encoding.tolist(),
                                          frame[y1:y2, x1:x2],
                                          known_face_names,
@@ -203,7 +203,7 @@ if __name__ == '__main__':
 
         # 视频显示
         # opencv不支持中文，这里使用PIL作为画板
-        frame_pil = Image.fromarray(cv2.cvtColor(orig_frame, cv2.COLOR_BGR2RGB))
+        frame_pil = Image.fromarray(orig_frame)
         draw = ImageDraw.Draw(frame_pil)  # 创建画板
         for x1, y1, x2, y2 in face_locations:
             # 把人脸框出来标号
@@ -216,7 +216,7 @@ if __name__ == '__main__':
         draw.rectangle([(0, 0), (500, 20)], (255, 0, 0))
         draw.text((0, 0), tips_text, (255, 255, 255), font)
         # 显示图片
-        frame_show = cv2.cvtColor(np.array(frame_pil), cv2.COLOR_RGB2BGR)
+        frame_show = np.array(frame_pil)
         cv2.imshow("register_face", frame_show)
         # 下一帧
         ret, frame = cap.read()

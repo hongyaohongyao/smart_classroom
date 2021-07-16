@@ -94,7 +94,7 @@ def test_webcam(model_dir, device_id):
 
             cv2.imwrite(f"./face_imgs/{i}_face_{label}.jpg", img)
             cv2.imwrite(f"./face_imgs/{i}_ft_{label}.jpg", generate_FT_2(img))
-            i = i + 1;
+            i = i + 1
 
         cv2.imshow("silent-face", frame)
         # 下一帧
