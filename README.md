@@ -5,6 +5,7 @@
 相关项目
 
 - [PyQt Demo](https://github.com/hongyaohongyao/smart_classroom_demo) 
+- [Java 版本](https://github.com/hongyaohongyao/SmartClassroomJava) 
 
 ## 课堂专注度分析
 
