@@ -2,6 +2,10 @@
 
 课堂专注度及考试作弊系统、课堂动态点名，情绪识别、表情识别和人脸识别结合
 
+相关项目
+
+- [PyQt Demo](https://github.com/hongyaohongyao/smart_classroom_demo) 
+
 ## 课堂专注度分析
 
 课堂专注度+表情识别
