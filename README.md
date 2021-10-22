@@ -86,6 +86,7 @@ Download the object detection model manually: **yolov3-spp.weights**([Google Dri
 ```shell
 python setup.py build develop
 ```
+[windows上安装scipy1.1.0可能会遇到的问题](https://github.com/MVIG-SJTU/AlphaPose/issues/722)
 
 ### 运行demo_inference.py
 
