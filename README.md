@@ -45,7 +45,7 @@ Currently the best performance tracking model. Paper coming soon.
 
 #### Getting started
 
-Download [human reid model](https://mega.nz/#!YTZFnSJY!wlbo_5oa2TpDAGyWCTKTX1hh4d6DvJhh_RUA2z6i_so) and place it into `AlphaPose/trackers/weights/`.
+Download [human reid model](https://github.com/MVIG-SJTU/AlphaPose/tree/master/trackers) and place it into `AlphaPose/trackers/weights/`.
 
 Then simply run alphapose with additional flag `--pose_track`
 
