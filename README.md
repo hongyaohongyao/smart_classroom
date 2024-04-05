@@ -2,9 +2,7 @@
 
 课堂专注度及考试作弊系统、课堂动态点名，情绪识别、表情识别和人脸识别结合
 
-PS：本仓库引用的项目的权重链接可能失效，推荐使用下方的相关项目，有提供完整的部署流程和权重链接。
-
-相关项目
+推荐使用下方的扩展项目，我们提供完整的部署流程和权重链接。
 
 - [PyQt Demo（推荐）](https://github.com/hongyaohongyao/smart_classroom_demo) 
 - [Java 版本](https://github.com/hongyaohongyao/SmartClassroomJava)
